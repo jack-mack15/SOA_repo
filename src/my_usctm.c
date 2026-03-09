@@ -224,26 +224,6 @@ inline void end_syscall_table_hack(void){
         preempt_enable();
 }
 
-
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
-__SYSCALL_DEFINEx(2, _trial, unsigned long, A, unsigned long, B){
-#else
-asmlinkage long sys_trial(unsigned long A, unsigned long B){
-#endif
-
-        printk("%s: thread %d requests a trial sys_call with %lu and %lu as parameters\n",MODNAME,current->pid,A,B);
-
-        return 0;
-}
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
-static unsigned long sys_trial = (unsigned long) __x64_sys_trial;	
-#else
-#endif
-
-
-
 #else 
 #endif
 

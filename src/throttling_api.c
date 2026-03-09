@@ -345,6 +345,36 @@ int dishack_syscall(int sys_num){
     return 0;
 }
 
+//api che rimuove tutte le strutture dati rcu
+int cleanup_rcu(void) {
+    struct hacked_syscall *entry, *tmp;
+    struct registered_uid *entry_uid, *tmp2;
+    struct registered_prog *entry_prog, *tmp3;
+    
+    spin_lock(&write_lock);
+    //forzo lo spegnimento del monitor
+    is_monitor_active = false;
+
+    list_for_each_entry_safe(entry, tmp, &hacked_syscall_list, list) {
+        list_del_rcu(&entry->list);
+        kfree(entry);
+    }
+
+    list_for_each_entry_safe(entry_uid, tmp2, &uid_list, list) {
+        list_del_rcu(&entry_uid->list);
+        kfree(entry_uid);
+    }
+
+    list_for_each_entry_safe(entry_prog, tmp3, &prog_list, list) {
+        list_del_rcu(&entry_prog->list);
+        kfree(entry_prog);
+    }
+
+    spin_lock(&write_lock);
+
+    return 0;
+}
+
 long throttling_wrapper(const struct pt_regs *) {
     //se arrivo a questa funzione, sono in una system call monitorata, dunque mi andrò a chiedere
     //chi è finito qua

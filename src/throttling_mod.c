@@ -17,16 +17,16 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Maccari Gianluca");
 MODULE_DESCRIPTION("A LKM Implementing a system call throttling mechanism");
 
+//definizione variabili
 LIST_HEAD(hacked_syscall_list);
 LIST_HEAD(uid_list);
 LIST_HEAD(prog_list);
-int syscall_array[NR_syscalls] = {0};
 DEFINE_SPINLOCK(write_lock);
 
-//valori di default
-bool is_monitor_active = false;
-int max_syscalls_per_sec = 100;
-int curr_syscalls = 0;
+int syscall_array[NR_syscalls] = {0};
+bool is_monitor_active;
+int max_syscalls_per_sec;
+int curr_syscalls;
 
 int init_module(void) {
 	printk(KERN_INFO "%s: Module init...\n", MODULE_NAME);
@@ -37,7 +37,17 @@ int init_module(void) {
 			return -1;
 	}
 
-	//init rcu
+	//valori di default
+	is_monitor_active = false;
+	max_syscalls_per_sec = 100;
+	curr_syscalls = 0;
+
+	//init del device
+	if (dev_init() != 0) {
+		printk(KERN_INFO "%s: Init device driver for throttling failed\n", MODULE_NAME);
+		return -1;
+	}
+
 	return 0;
 
 }
@@ -47,5 +57,11 @@ void clean_up_module(void) {
 
 	//clean up syscall table hacking
 	cleanup_system_call_table();
+
+	//clean up rcu
+	cleanup_rcu();
+
+	//clean up dev
+	dev_cleanup();
 
 }

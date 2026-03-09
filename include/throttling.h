@@ -62,4 +62,6 @@ int hack_syscall(int sys_num);
 int dishack_syscall(int sys_num);
 long throttling_wrapper(const struct pt_regs *);
 
+int cleanup_rcu(void);
+
 #endif 
