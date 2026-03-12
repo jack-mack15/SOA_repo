@@ -1,33 +1,30 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/ioctl.h>
+//PROGRAMMA CHE DEVE ESSERE MONITORATO DAL MODULO
 
-#include "throttling.h"
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/syscall.h>
+#include <fcntl.h>
 
 int main() {
-    int fd;
+    printf("Sono il programma VITTIMA. Il mio PID è %d\n", getpid());
+    printf("Il mio User ID è %d\n", getuid());
+    printf("Inizio a spammare la system call 2 (open)...\n");
 
-    fd = open("/dev/throttling_device", O_RDWR);
-    if (fd < 0) {
-        perror("Errore: Impossibile aprire /dev/throttling_device");
-        return EXIT_FAILURE;
+    int test_fd;
+    int i = 0;
+
+    while(i < 30) {
+        //accesso alla sys open
+        test_fd = syscall(SYS_open, "test.txt", O_CREAT | O_RDWR, 0644);
+        
+        if (fd < 0) {
+            perror("Errore nell'apertura del file di test");
+        }
+
+        //usleep(50000);
+        close(test_fd);
+        i++;
     }
 
-    int syscall_nr = 2;   // Es: sys_open
-
-    printf("Inviando richiesta di throttling al Kernel...\n");
-
-    
-    if (ioctl(fd, IOCTL_DEREGISTER_SYSCALL, &syscall_nr) != 0) {
-        perror("Errore: ioctl fallita! Il Kernel ha rifiutato il comando");
-        close(fd);
-        return EXIT_FAILURE;
-    }
-
-    printf("Comando accettato con successo dal Kernel!\n");
-
-    close(fd);
-    return EXIT_SUCCESS;
+    return 0;
 }
