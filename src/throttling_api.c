@@ -4,10 +4,14 @@
 #include <linux/slab.h>
 #include <asm/syscall.h>
 #include <linux/nospec.h>
+#include <linux/sched.h>
+#include <linux/cred.h>        // Per current_uid()
+#include <linux/rcupdate.h>
 
 #include "throttling.h"
 #include "throttling_rcu.h"
 #include "syscall_table_hack.h"
+#include "throttling_hidden.h"
 
 #define MODULE_NAME "THROTTLING MOD"
 
@@ -180,57 +184,48 @@ int deregister_prog_name(const char *prog_name){
 
 //api che accende il monitor se è spento (altrimenti non fa nulla)
 int switch_on_monitor(void){
-
-    spin_lock(&write_lock);
-    if (is_monitor_active) {
-        spin_unlock(&write_lock);
-        printk(KERN_INFO "Throttling module: monitor already on\n");
-        return 0;
-    }
-    //se non è acceso
-
     //se il prof volesse che riattivo tutte le system call, allora non prendo lock e chiamo register_system_call
     //su tutte le system call prese da un'altra lista
+    
+    if (atomic_cmpxchg(&is_monitor_active, 0, 1) == 0) {
+        //printk(KERN_INFO "Throttling module: monitor switched on\n");
+        return 0;
+    }
 
-    is_monitor_active = true;
-    spin_unlock(&write_lock);
-    printk(KERN_INFO "Throttling module: monitor turned on\n");
-    return 0;
-
+    //se è spento
+    printk(KERN_INFO "Throttling module: monitor already on\n");
+    return -1;
 }
 
 //api che spegne il monitor se è acceso (altrimenti non fa nnulla)
 int switch_off_monitor(void){
-    spin_lock(&write_lock);
-    if (!is_monitor_active) {
-        spin_unlock(&write_lock);
-        printk(KERN_INFO "Throttling module: monitor already off\n");
-        return 0;
-    }
-    //se non è acceso
-
     //se il prof volesse che disattivo tutte le system call, allora non prendo lock e chiamo deregister_system_call
     //su tutte le system call prese da un'altra lista
 
-    is_monitor_active = false;
-    spin_unlock(&write_lock);
-    printk(KERN_INFO "Throttling module: monitor turned off\n");
-    return 0;
+    if (atomic_cmpxchg(&is_monitor_active, 1, 0) == 1) {
+        //printk(KERN_INFO "Throttling module: monitor switched off\n");
+        return 0;
+    }
+    //se il monitor è spento
+    printk(KERN_INFO "Throttling module: monitor already turned off\n");
+    return -1;
 }
 
 
 
 //api che imposta il numero massimo di system call per secondo
-int set_max_syscall(const int new_max){
+int set_max_syscall(int new_max){
 
     if (new_max < 0) {
         printk(KERN_INFO "Throttling module: new max value must be greater than 0, u passed: %d\n",new_max);
         return -EINVAL;
     }
 
-	spin_lock(&write_lock);
-    max_syscalls_per_sec = new_max;
-    spin_unlock(&write_lock);
+    int old_max = atomic_xchg(&max_syscalls_per_sec, new_max);
+	
+    //print del vecchio valore può servire??
+    printk(KERN_INFO "Throttling module: new max value: %d, old value: %d\n",new_max,old_max);
+    
     return 0;
 }
 
@@ -353,7 +348,7 @@ int cleanup_rcu(void) {
     
     spin_lock(&write_lock);
     //forzo lo spegnimento del monitor
-    is_monitor_active = false;
+    atomic_cmpxchg(&is_monitor_active, 1, 0);
 
     list_for_each_entry_safe(entry, tmp, &hacked_syscall_list, list) {
         list_del_rcu(&entry->list);
@@ -375,18 +370,121 @@ int cleanup_rcu(void) {
     return 0;
 }
 
-long throttling_wrapper(const struct pt_regs *) {
+
+
+long throttling_wrapper(const struct pt_regs *regs) {
     //se arrivo a questa funzione, sono in una system call monitorata, dunque mi andrò a chiedere
     //chi è finito qua
 
-    long ret = 0;
-    //set up del contesto
+    bool skip_check = false;
+    bool need_mon = false;
+    uid_t curr_ueid;
 
-    //verifica se monitor è acceso
+    struct registered_uid *entry_uid;
+    struct registered_prog *entry_prog;
 
-    //verifica user id o program name
+    //questo per la corretta syscall
+    int original_sysnum = regs->orig_ax;
 
-    //controllo numero system call disponibili
-    return ret;
+    //prima cosa check sul monitor
+    if(atomic_read(&is_monitor_active) == 0) {
+        //monitor off
+        goto original_system_call;
+    }
 
+    //controllo prog name e user id
+    curr_ueid = __kuid_val(current_euid());
+
+    rcu_read_lock();
+    list_for_each_entry_rcu(entry_uid, &uid_list, list) {
+        if (entry_uid->uid == curr_ueid) {
+            skip_check = true;
+            need_mon = true;
+            break;
+        }
+    }
+    rcu_read_unlock();
+    if(!skip_check) {
+        //entro se non ho trovato euid
+        rcu_read_lock();
+        list_for_each_entry_rcu(entry_prog, &prog_list, list) {
+            //magari sufficiente subname?
+            if (strncmp(current->comm,entry_prog->name,TASK_COMM_LEN) == 0) {
+                need_mon = true;
+                break;
+            }
+        }
+        rcu_read_unlock();
+    }
+
+    if (!need_mon) {
+        //non è monitorato
+        goto original_system_call;
+    }
+
+    //controllo disponibilità syscall
+    unsigned long start_time = 0;
+    unsigned long delay = 0;
+
+    while (atomic_dec_if_positive(&curr_syscalls) < 0) {
+        //entro qua se non posso invocare system call, mi metto in attesa.
+        
+        //per statistiche
+        atomic64_inc(&blocked_thread);
+        start_time = jiffies;
+
+        int wait_ret = wait_event_interruptible(thrott_wq, 
+                    atomic_read(&curr_syscalls) > 0 || atomic_read(&is_monitor_active) == 0);
+        
+        delay = delay + (jiffies - start_time);
+        
+
+        if (wait_ret != 0) {
+            //se si verificano altre condizioni di risveglio
+            //meglio invocare la system call?
+            atomic64_dec(&blocked_thread);
+            return -EINTR; 
+        }
+        
+        //se monitor è andato offline, "libero" la system call
+        if (atomic_read(&is_monitor_active) == 0) {
+            atomic64_dec(&blocked_thread);
+            break;
+        }
+
+        atomic64_dec(&blocked_thread);
+
+        //se arrivo qui riverifico la condizione del while
+    }
+
+
+    goto original_system_call;
+    
+    //chiamata alla system call originale
+    original_system_call: 
+    {
+        struct hacked_syscall *entry_sys;
+        long (*to_call)(const struct pt_regs *) = NULL;
+        rcu_read_lock();
+        
+        list_for_each_entry_rcu(entry_sys,&hacked_syscall_list,list) {
+            if(entry_sys->syscall_nr == original_sysnum) {
+                to_call = entry_sys->original_syscall;
+                break;
+            }
+        }
+        
+        rcu_read_unlock();
+
+        if (to_call != NULL) {
+            //chiamo system call originale
+            long ret_value = to_call(regs);
+            return ret_value;
+
+        } else {
+            //se non si trova la system call, non dovrebbe accadere
+            return -ENOSYS; 
+        }
+
+    };
 }

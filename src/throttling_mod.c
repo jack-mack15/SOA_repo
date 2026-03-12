@@ -10,6 +10,7 @@
 #include "throttling_rcu.h"
 #include "syscall_table_hack.h"
 #include "throttling_dev.h"
+#include "throttling_hidden.h"
 
 #define MODULE_NAME "THROTTLING MOD"
 
@@ -22,11 +23,13 @@ LIST_HEAD(hacked_syscall_list);
 LIST_HEAD(uid_list);
 LIST_HEAD(prog_list);
 DEFINE_SPINLOCK(write_lock);
+DECLARE_WAIT_QUEUE_HEAD(thrott_wq);
 
 int syscall_array[NR_syscalls] = {0};
-bool is_monitor_active;
-int max_syscalls_per_sec;
-int curr_syscalls;
+atomic_t is_monitor_active = ATOMIC_INIT(0);
+atomic_t max_syscalls_per_sec = ATOMIC_INIT(100);
+atomic_t curr_syscalls = ATOMIC_INIT(0);
+atomic64_t blocked_thread = ATOMIC_INIT(0);
 
 int init_module(void) {
 	printk(KERN_INFO "%s: Module init...\n", MODULE_NAME);
@@ -37,14 +40,15 @@ int init_module(void) {
 			return -1;
 	}
 
-	//valori di default
-	is_monitor_active = false;
-	max_syscalls_per_sec = 100;
-	curr_syscalls = 0;
-
 	//init del device
 	if (dev_init() != 0) {
 		printk(KERN_INFO "%s: Init device driver for throttling failed\n", MODULE_NAME);
+		return -1;
+	}
+
+	//init del timer 
+	if (core_setup() != 0) {
+		printk(KERN_INFO "%s: Init core for throttling failed\n", MODULE_NAME);
 		return -1;
 	}
 
@@ -64,4 +68,6 @@ void clean_up_module(void) {
 	//clean up dev
 	dev_cleanup();
 
+	//rimozione timer
+	core_cleanup();
 }

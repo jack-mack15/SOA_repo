@@ -5,6 +5,7 @@
 #include <linux/spinlock.h>
 #include <linux/types.h>
 #include <linux/rcupdate.h>
+#include <linux/types.h>
 
 //uso tre strutture dati differenti per syscall number, user id e program names
 //una struttura dati aggiuntiva per ricordarmi le system call hackerate
@@ -41,12 +42,15 @@ extern int syscall_array[];
 extern spinlock_t write_lock;
 
 //variabile che indica se monitor è attivo o non (per switch on/off)
-extern bool is_monitor_active;
+extern atomic_t is_monitor_active;
 
 //numero massimo di system call per secondo
-extern int max_syscalls_per_sec;
+extern atomic_t max_syscalls_per_sec;
 
 //numero corrente (per epoca) di system call invocate
-extern int curr_syscalls;
+extern atomic_t curr_syscalls;
+
+//numero di thread bloccati per statistiche
+extern atomic64_t blocked_thread;
 
 #endif // THROTTLER_H

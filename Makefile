@@ -5,7 +5,8 @@ throttling_module-objs := \
 	src/throttling_dev.o \
 	src/my_usctm.o \
 	src/throttling_mod.o \
-	src/my_vtpmo.o 
+	src/my_vtpmo.o \
+	src/throttling_hidden.o
 
 PWD := $(shell pwd)
 

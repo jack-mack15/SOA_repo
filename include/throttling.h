@@ -54,7 +54,7 @@ int deregister_prog_name(const char *prog_name);
 int switch_on_monitor(void);
 int switch_off_monitor(void);
 
-int set_max_syscall(const int new_max);
+int set_max_syscall(int new_max);
 
 struct throttling_stats get_stats(void);
 

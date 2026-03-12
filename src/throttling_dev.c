@@ -41,10 +41,10 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
     uid_t param_uid;
 
     //verifica se root (serve per tutti i comandi?)
-    if (current_uid().val != 0) {
+    /*if (current_uid().val != 0) {
         printk(KERN_WARNING "Throttling Module: u must be root!\n");
         return -EPERM; // Error: Operation not permitted
-    }
+    }*/
 
     //in base al comando si deve poter: 
     //registrare/deregistrare program name, user id, syscall num;
