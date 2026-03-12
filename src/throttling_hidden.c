@@ -12,7 +12,9 @@ int core_setup(void) {
 	
 	timer_setup(&epoch_timer,epoch_handler,0);
 
-	//serve altro?
+	//prima scadenza
+	mod_timer(&epoch_timer, jiffies + HZ);
+
 	return 0;
 }
 

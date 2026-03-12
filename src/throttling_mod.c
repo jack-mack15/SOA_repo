@@ -27,7 +27,7 @@ DEFINE_SPINLOCK(write_lock);
 DECLARE_WAIT_QUEUE_HEAD(thrott_wq);
 
 int syscall_array[NR_syscalls] = {0};
-atomic_t is_monitor_active = ATOMIC_INIT(0);
+atomic_t is_monitor_active = ATOMIC_INIT(1);
 atomic_t max_syscalls_per_sec = ATOMIC_INIT(3);
 atomic_t curr_syscalls = ATOMIC_INIT(3);
 atomic64_t blocked_thread = ATOMIC_INIT(0);
