@@ -34,6 +34,8 @@ void *spam_open(void *arg) {
         // usleep(50000); // Toglilo dal commento se vuoi rallentarli un po'
     }
 
+    printf("[Thread %d] Ho eseguito %d\n", i);
+
     printf("[Thread %d] Ho terminato le mie %d chiamate.\n", id, NUM_OPENS_PER_THREAD);
     return NULL;
 }
