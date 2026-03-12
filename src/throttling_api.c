@@ -5,13 +5,14 @@
 #include <asm/syscall.h>
 #include <linux/nospec.h>
 #include <linux/sched.h>
-#include <linux/cred.h>        // Per current_uid()
+#include <linux/cred.h>
 #include <linux/rcupdate.h>
 
 #include "throttling.h"
 #include "throttling_rcu.h"
 #include "syscall_table_hack.h"
 #include "throttling_hidden.h"
+#include "throttling_api.h"
 
 #define MODULE_NAME "THROTTLING MOD"
 

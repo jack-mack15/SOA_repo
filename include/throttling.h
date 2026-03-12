@@ -41,27 +41,6 @@ struct throttling_stats {
 //TODO maybe soezzare le statistiche?
 #define IOCTL_GET_STATS         _IOR(THROTTLING_MAGIC, 10, struct throttling_stats)
 
-//api
-int register_system_call(const int syscall_numb);
-int deregister_system_call(const int syscall_numb);
-
-int register_user_id(const uid_t user_id);
-int deregister_user_id(const uid_t user_id);
-
-int register_prog_name(const char *prog_name);
-int deregister_prog_name(const char *prog_name);
-
-int switch_on_monitor(void);
-int switch_off_monitor(void);
-
-int set_max_syscall(int new_max);
-
 struct throttling_stats get_stats(void);
-
-int hack_syscall(int sys_num);
-int dishack_syscall(int sys_num);
-long throttling_wrapper(const struct pt_regs *);
-
-int cleanup_rcu(void);
 
 #endif 

@@ -11,6 +11,7 @@
 #include "syscall_table_hack.h"
 #include "throttling_dev.h"
 #include "throttling_hidden.h"
+#include "throttling_api.h"
 
 #define MODULE_NAME "THROTTLING MOD"
 

@@ -9,6 +9,7 @@
 
 #include "throttling.h"
 #include "throttling_dev.h"
+#include "throttling_api.h"
 
 #define MODULE_NAME "THROTTLING MOD"
 #define DEVICE_NAME "throttling_device"
