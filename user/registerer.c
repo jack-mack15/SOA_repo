@@ -46,7 +46,7 @@ int main() {
     }
 
     //registrazione program name
-    if (ioctl(fd, IOCTL_REGISTER_PROG, victim) != 0) {
+    if (ioctl(fd, IOCTL_REGISTER_PROG, prog_name) != 0) {
         perror("Errore: ioctl fallita! Il Kernel ha rifiutato il comando");
         close(fd);
         return EXIT_FAILURE;

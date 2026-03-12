@@ -430,6 +430,8 @@ long throttling_wrapper(const struct pt_regs *regs) {
     while (atomic_dec_if_positive(&curr_syscalls) < 0) {
         //entro qua se non posso invocare system call, mi metto in attesa.
         
+        printk(KERN_INFO "Throttling module: syscall blocked. Now blocked threads are :%lld\n",atomic_read(&blocked_thread));
+
         //per statistiche
         atomic64_inc(&blocked_thread);
         start_time = jiffies;
