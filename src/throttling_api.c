@@ -398,6 +398,9 @@ long throttling_wrapper(const struct pt_regs *regs) {
 
     rcu_read_lock();
     list_for_each_entry_rcu(entry_uid, &uid_list, list) {
+
+        printk(KERN_INFO "user id corr: %u user nella lista %u\n",curr_ueid,entry_uid->uid);
+
         if (entry_uid->uid == curr_ueid) {
             skip_check = true;
             need_mon = true;
@@ -410,6 +413,9 @@ long throttling_wrapper(const struct pt_regs *regs) {
         rcu_read_lock();
         list_for_each_entry_rcu(entry_prog, &prog_list, list) {
             //magari sufficiente subname?
+            
+            printk(KERN_INFO "curr name: %s, nella lista ho %s\n", current->comm,entry_prog->name);
+            
             if (strncmp(current->comm,entry_prog->name,TASK_COMM_LEN) == 0) {
                 need_mon = true;
                 break;

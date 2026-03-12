@@ -28,8 +28,8 @@ DECLARE_WAIT_QUEUE_HEAD(thrott_wq);
 
 int syscall_array[NR_syscalls] = {0};
 atomic_t is_monitor_active = ATOMIC_INIT(0);
-atomic_t max_syscalls_per_sec = ATOMIC_INIT(10);
-atomic_t curr_syscalls = ATOMIC_INIT(10);
+atomic_t max_syscalls_per_sec = ATOMIC_INIT(3);
+atomic_t curr_syscalls = ATOMIC_INIT(3);
 atomic64_t blocked_thread = ATOMIC_INIT(0);
 
 int init_module(void) {
@@ -57,7 +57,7 @@ int init_module(void) {
 
 }
 
-void clean_up_module(void) {
+void cleanup_module(void) {
 	printk(KERN_INFO "%s: Module cleanup...\n", MODULE_NAME);
 
 	//clean up syscall table hacking
