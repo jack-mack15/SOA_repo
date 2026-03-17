@@ -7,6 +7,7 @@
 #include <linux/sched.h>
 #include <linux/cred.h>
 #include <linux/rcupdate.h>
+#include <linux/err.h>
 
 #include "throttling.h"
 #include "throttling_rcu.h"
@@ -15,6 +16,8 @@
 #include "throttling_api.h"
 
 #define MODULE_NAME "THROTTLING MOD"
+
+void check_and_set_statistic(unsigned long delay, int original_sysnum);
 
 //api che registra system call number
 int register_system_call(const int syscall_numb){
@@ -123,7 +126,7 @@ int register_prog_name(const char *prog_name){
         return -ENOMEM;
     }
 
-    //copio al massimo 255, chiedere se va bene
+    //copio i nomi
     strncpy(new_prog->name, prog_name, sizeof(new_prog->name) - 1);
     new_prog->name[sizeof(new_prog->name) - 1] = '\0';
 
@@ -151,6 +154,7 @@ int register_prog_name(const char *prog_name){
     printk(KERN_INFO "Throttling module: prog name '%s' registered\n", prog_name);
     return 0;
 }
+
 
 //api che deregistra il program name specificato
 int deregister_prog_name(const char *prog_name){
@@ -182,7 +186,6 @@ int deregister_prog_name(const char *prog_name){
 }
 
 
-
 //api che accende il monitor se è spento (altrimenti non fa nulla)
 int switch_on_monitor(void){
     //se il prof volesse che riattivo tutte le system call, allora non prendo lock e chiamo register_system_call
@@ -190,6 +193,9 @@ int switch_on_monitor(void){
     
     if (atomic_cmpxchg(&is_monitor_active, 0, 1) == 0) {
         //printk(KERN_INFO "Throttling module: monitor switched on\n");
+
+        //riattivo il timer della waitqueue
+        core_setup();
         return 0;
     }
 
@@ -205,8 +211,16 @@ int switch_off_monitor(void){
 
     if (atomic_cmpxchg(&is_monitor_active, 1, 0) == 1) {
         //printk(KERN_INFO "Throttling module: monitor switched off\n");
+
+        //sicuro devo svegliare i thread che sono in attesa 
+        wake_up_interruptible(&thrott_wq);
+
+        //rimuovo il timer del gestore della wait queue
+        core_cleanup();
+
         return 0;
     }
+
     //se il monitor è spento
     printk(KERN_INFO "Throttling module: monitor already turned off\n");
     return -1;
@@ -233,19 +247,122 @@ int set_max_syscall(int new_max){
 
 
 //api che ritorna le statistiche
-struct throttling_stats get_stats(void){
+struct thread_stats_cr_struct *get_thread_stats(void){
     
-    struct throttling_stats test;// = kmalloc(sizeof(struct throttling_stats), GFP_KERNEL);
-    test.max_blocked_threads = 3;
-    test.avg_blocked_threads = 3;
-    return test;
+    struct thread_stats_cr_struct *to_ret = kmalloc(sizeof(struct thread_stats_cr_struct), GFP_KERNEL);
+    if(!to_ret) {
+        printk(KERN_ERR "Throttling module: kmalloc error in get_thread_stats\n");
+        return ERR_PTR(-ENOMEM);
+    }
+
+    to_ret->end_time = jiffies;
+    to_ret->sum_blocked = atomic64_read(&(info_threads.sum_blocked));
+    to_ret->start_time = atomic64_read(&(info_threads.start_time));
+    to_ret->peak_blocked = atomic_read(&(info_threads.peak_blocked));
+    return to_ret;
+}
+
+struct syscall_cr_struct *get_syscall_stats(int sys_num) {
+
+    struct hacked_syscall *entry;
+    struct hacked_syscall *curr = NULL;
+    struct syscall_cr_struct *to_ret;
+
+    to_ret = kmalloc(sizeof(struct syscall_cr_struct), GFP_KERNEL);
+    if(!to_ret) {
+        printk(KERN_ERR "Throttling module: kmalloc error in get_syscall_stats\n");
+        return ERR_PTR(-ENOMEM);
+    }
+
+    //sanitizzazione, il controllo fatto prima
+    int safe_nr = array_index_nospec(sys_num, NR_syscalls);
+
+    rcu_read_lock();
+
+    list_for_each_entry_rcu(entry, &hacked_syscall_list, list) {
+        if (entry->syscall_nr == safe_nr) {
+            curr = entry;
+            break;
+        }
+    }
+
+    rcu_read_unlock();
+
+    if(!curr) {
+        printk(KERN_ERR "Throttling module: syscall %d not hacked, no stats available\n",safe_nr);
+        return ERR_PTR(-EFAULT);
+    }
+
+    to_ret->syscall_nr = curr->stats->syscall_nr;
+    to_ret->peak_delay = curr->stats->peak_delay;
+    to_ret->peak_uid = curr->stats->peak_uid;
+    strscpy(to_ret->peak_prog_name, curr->stats->peak_prog_name, sizeof(to_ret->peak_prog_name));
+
+    return to_ret;
+}
+
+//funzioni per verificare se system call, program name e user id sono stati registrati
+bool check_syscall(const int sys_num){
+    bool to_ret = false;
+
+    //sanitizzazione, il controllo fatto prima
+    int safe_nr = array_index_nospec(sys_num, NR_syscalls);
+    
+    rcu_read_lock();
+    if(syscall_array[safe_nr]) {
+        to_ret = true;
+    }
+    rcu_read_unlock();
+
+    return to_ret;
+}
+
+bool check_uid(const uid_t user_id){
+    bool to_ret = false;
+    struct registered_uid *entry;
+    
+    rcu_read_lock();
+
+    list_for_each_entry_rcu(entry, &uid_list, list) {
+        if (entry->uid == user_id) {
+            to_ret = true;
+            break;
+        }
+    }
+
+    rcu_read_unlock();
+
+    return to_ret;
+}
+
+bool check_progname(const char *prog_name){
+    bool to_ret = false;
+    struct registered_prog *entry;
+    
+    rcu_read_lock();
+
+    list_for_each_entry_rcu(entry, &prog_list, list) {
+        if (strncmp(entry->name, prog_name, sizeof(entry->name)) == 0) {
+            to_ret = true;
+            break;
+        }
+    }
+
+    rcu_read_unlock();
+
+    return to_ret;
 }
 
 
 //funzione che sostituisce la origniale system call con il mio wrapper per throttling
 int hack_syscall(int sys_num) {
 
-    //alloco fuori dai lock
+    //alloco fuori dai lock le struct
+    struct syscall_stats *stats = kmalloc(sizeof(struct syscall_stats), GFP_KERNEL);
+    if (!stats) {
+        printk(KERN_ERR "Throttling module: kmalloc error in hack_syscall\n");
+        return -ENOMEM;
+    }
     struct hacked_syscall *new_hack = kmalloc(sizeof(struct hacked_syscall), GFP_KERNEL);
     if (!new_hack) {
         printk(KERN_ERR "Throttling module: kmalloc error in hack_syscall\n");
@@ -255,12 +372,19 @@ int hack_syscall(int sys_num) {
     //sanitizzazione, il controllo fatto prima
     int safe_nr = array_index_nospec(sys_num, NR_syscalls);
 
+    //riempo alcuni campi delle struct
+    stats->syscall_nr = safe_nr;
+    stats->peak_delay = 0.0;
+    stats->peak_uid = 0;
+    new_hack->stats = stats;
+
     //prendo lock in scrittura, nessuno deve scrivere oltre me
     spin_lock(&write_lock);
 
     //controllo se già presente e in caso annullo tutto
     if(syscall_array[safe_nr]) {
         spin_unlock(&write_lock);
+        kfree(stats);
         kfree(new_hack);
         printk(KERN_ERR "Throttling module: syscall %d already hacked\n",safe_nr);
         return -EINVAL;
@@ -336,6 +460,7 @@ int dishack_syscall(int sys_num){
 
     synchronize_rcu();
     
+    kfree(to_remove->stats);
     kfree(to_remove);
 
     return 0;
@@ -371,6 +496,32 @@ int cleanup_rcu(void) {
     return 0;
 }
 
+
+void check_and_set_statistic(unsigned long delay, int original_sysnum) {
+    struct hacked_syscall *entry_sys;
+    rcu_read_lock();
+        
+    list_for_each_entry_rcu(entry_sys,&hacked_syscall_list,list) {
+        if(entry_sys->syscall_nr == original_sysnum) {
+            
+            if (entry_sys->stats->peak_delay < delay) {
+                //aggiorno statistiche
+                spin_lock(&stats_lock);
+
+                entry_sys->stats->peak_delay = delay;
+                entry_sys->stats->peak_uid = __kuid_val(current_euid());
+                strscpy(entry_sys->stats->peak_prog_name, current->comm, TASK_COMM_LEN);
+
+                spin_unlock(&stats_lock);
+            }
+            
+            break;
+        }
+    }
+        
+    rcu_read_unlock();
+    return;
+}
 
 
 long throttling_wrapper(const struct pt_regs *regs) {
@@ -471,7 +622,12 @@ long throttling_wrapper(const struct pt_regs *regs) {
     
     //chiamata alla system call originale
     original_system_call: 
-    {
+    {   
+        if (delay > 0) {
+            //aggiorno statistica della system call
+            check_and_set_statistic(delay,original_sysnum);
+        }
+
         struct hacked_syscall *entry_sys;
         long (*to_call)(const struct pt_regs *) = NULL;
         rcu_read_lock();

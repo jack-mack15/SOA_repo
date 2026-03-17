@@ -12,3 +12,8 @@ int deregister_prog_name(const char *prog_name);
 int switch_on_monitor(void);
 int switch_off_monitor(void);
 int set_max_syscall(int new_max);
+struct thread_stats_cr_struct *get_thread_stats(void);
+struct syscall_cr_struct *get_syscall_stats(int sys_num);
+bool check_syscall(const int syscall_numb);
+bool check_uid(const uid_t user_id);
+bool check_progname(const char *prog_name);

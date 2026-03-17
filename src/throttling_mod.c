@@ -24,6 +24,7 @@ LIST_HEAD(hacked_syscall_list);
 LIST_HEAD(uid_list);
 LIST_HEAD(prog_list);
 DEFINE_SPINLOCK(write_lock);
+DEFINE_SPINLOCK(stats_lock);
 DECLARE_WAIT_QUEUE_HEAD(thrott_wq);
 
 int syscall_array[NR_syscalls] = {0};
@@ -31,6 +32,12 @@ atomic_t is_monitor_active = ATOMIC_INIT(1);
 atomic_t max_syscalls_per_sec = ATOMIC_INIT(3);
 atomic_t curr_syscalls = ATOMIC_INIT(3);
 atomic64_t blocked_thread = ATOMIC_INIT(0);
+
+struct thread_stats info_threads = {
+    .peak_blocked = ATOMIC_INIT(0),
+    .sum_blocked = ATOMIC_INIT(0),
+    .start_time = ATOMIC_INIT(0)
+};
 
 int init_module(void) {
 	printk(KERN_INFO "%s: Module init...\n", MODULE_NAME);

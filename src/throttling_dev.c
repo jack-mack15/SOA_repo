@@ -5,6 +5,7 @@
 #include <linux/slab.h>
 #include <linux/cdev.h>
 #include <linux/version.h>
+#include <linux/sched.h>
 #include <asm/syscall.h>
 
 #include "throttling.h"
@@ -37,21 +38,117 @@ static int driver_release(struct inode *inode, struct file *file) {
 static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long arg) {
 
     int param_int;
-    char prog_name[256];
-    struct throttling_stats stats;
+    char prog_name[16];
     uid_t param_uid;
 
-    //verifica se root (serve per tutti i comandi?)
-    /*if (current_uid().val != 0) {
-        printk(KERN_WARNING "Throttling Module: u must be root!\n");
-        return -EPERM; // Error: Operation not permitted
-    }*/
+    
+    //se è non root può accedere comunque alle statistiche e info di cosa è registrato
+    switch(cmd) {
+            case IOCTL_GET_THREAD_STATS:
+            //per ottenere statistiche dei thread bloccati
+            printk(KERN_INFO "%s: Getting thread stats\n", MODULE_NAME);
 
-    //in base al comando si deve poter: 
-    //registrare/deregistrare program name, user id, syscall num;
-    //vedere quali di questi sono registrati; 
-    //disattivare/attivare monitor;
-    //stampa statistiche?
+            struct thread_stats_cr_struct *t_stats;
+
+            t_stats = get_thread_stats();
+        
+            if (copy_to_user((void __user*)arg, t_stats, sizeof(struct thread_stats_cr_struct)) != 0) {
+                printk(KERN_ERR "Throttler: Impossibile copiare i dati in User Space!\n");
+                // Codice di errore standard POSIX per "Bad Address" (Puntatore utente invalido)
+                return -EFAULT; 
+            }
+            return 0;
+        
+        case IOCTL_GET_SYSCALL_STATS:
+            //per ottenere statistiche di una system call
+            printk(KERN_INFO "%s: Getting system call stats\n", MODULE_NAME);
+
+            struct syscall_cr_struct *sys_stats;
+
+            if (copy_from_user(sys_stats, (int __user *)arg, sizeof(struct syscall_cr_struct))) {
+                printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
+                return -EFAULT; 
+            }
+            //controllo range del parametro passato in input
+            if (param_int < 0 || param_int >= NR_syscalls) {
+                printk(KERN_ERR "%s: Syscall number %d not valid\n",MODULE_NAME, param_int);
+                return -1;
+            }
+
+            sys_stats = get_syscall_stats(sys_stats->syscall_nr);
+            
+            if (copy_to_user((void __user*)arg, sys_stats, sizeof(struct syscall_cr_struct)) != 0) {
+                printk(KERN_ERR "%s: Failed to copy data to user space\n", MODULE_NAME);
+                // Codice di errore standard POSIX per "Bad Address" (Puntatore utente invalido)
+                return -EFAULT; 
+            }
+            return 0;
+
+        case IOCTL_CHECK_SYSCALL:
+            struct check_syscall_cr sys_check;
+            if (copy_from_user(&sys_check, (int __user *)arg, sizeof(struct check_syscall_cr))) {
+                printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
+                return -EFAULT; 
+            }
+            if (sys_check.syscall_nr < 0 || sys_check.syscall_nr >= NR_syscalls) {
+                printk(KERN_ERR "%s: Syscall number %d not valid\n",MODULE_NAME, param_int);
+                return -1;
+            }
+
+            printk(KERN_INFO "%s: Checking syscall number %d\n", MODULE_NAME, sys_check.syscall_nr);
+
+            sys_check.check = check_syscall(sys_check.syscall_nr);
+            
+            if (copy_to_user((struct check_syscall_cr __user *)arg, &sys_check, sizeof(struct check_syscall_cr))) {
+                printk(KERN_ERR "%s: Failed to copy data to user space\n", MODULE_NAME);
+                return -EFAULT; 
+            }
+
+            return 0;
+
+        case IOCTL_CHECK_UID:
+            struct check_uid_cr uid_check;
+            if (copy_from_user(&uid_check, (int __user *)arg, sizeof(struct check_uid_cr))) {
+                printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
+                return -EFAULT; 
+            }
+
+            printk(KERN_INFO "%s: Checking User id %d\n", MODULE_NAME, uid_check.uid);
+
+            uid_check.check = check_uid(uid_check.uid);
+
+            if (copy_to_user((struct check_uid_cr __user *)arg, &uid_check, sizeof(struct check_uid_cr))) {
+                printk(KERN_ERR "%s: Failed to copy data to user space\n", MODULE_NAME);
+                return -EFAULT; 
+            }
+
+            return 0;
+
+        case IOCTL_CHECK_PROG:
+            struct check_progname_cr prog_check;
+            if (copy_from_user(&prog_check, (char __user *)arg, sizeof(struct check_progname_cr))) {
+                printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
+                return -EFAULT;
+            }
+            printk(KERN_INFO "%s: Checking program name %s\n", MODULE_NAME, prog_check.name);
+
+            prog_check.check = check_progname(prog_check.name);
+
+            if (copy_to_user((struct check_progname_cr __user *)arg, &prog_check, sizeof(struct check_progname_cr))) {
+                printk(KERN_ERR "%s: Failed to copy data to user space\n", MODULE_NAME);
+                return -EFAULT; 
+            }            
+
+            return 0;
+    }
+
+    
+    //controllo se l'utente è root per i prossimi comandi
+    if (current_uid().val != 0) {
+        printk(KERN_WARNING "Throttling Module: u must be root!\n");
+        return -EPERM;
+    }
+        
     switch(cmd) {
         case IOCTL_REGISTER_SYSCALL:
         	//registrazione syscall
@@ -81,7 +178,7 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
 
         case IOCTL_REGISTER_PROG:
         	//registrazione program name
-        	if (copy_from_user(prog_name, (char __user *)arg, sizeof(prog_name))) {
+        	if (copy_from_user(prog_name, (char __user *)arg, TASK_COMM_LEN - 1)) {
         		printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
                 return -EFAULT;
             }
@@ -118,7 +215,7 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
 
         case IOCTL_DEREGISTER_PROG:
         	//per deregistrare programma
-        	if (copy_from_user(prog_name, (char __user *)arg, sizeof(prog_name))) {
+        	if (copy_from_user(prog_name, (char __user *)arg, TASK_COMM_LEN - 1)) {
         		printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
                 return -EFAULT;
             }
@@ -149,20 +246,6 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
         	printk(KERN_INFO "%s: Switching off monitor\n", MODULE_NAME);
 
         	return switch_off_monitor();
-
-        case IOCTL_GET_STATS:
-        	//per ottenere statistiche
-        	printk(KERN_INFO "%s: Getting stats\n", MODULE_NAME);
-
-        	stats = get_stats();
-            
-            if (copy_to_user((void __user*)arg, &stats, sizeof(struct throttling_stats)) != 0) {
-                printk(KERN_ERR "Throttler: Impossibile copiare i dati in User Space!\n");
-                // Codice di errore standard POSIX per "Bad Address" (Puntatore utente invalido)
-                return -EFAULT; 
-            }
-        	//TODO implementare delle stampe?
-            return 0;
 
         default:
             printk(KERN_ERR "%s: Unknown ioctl command %u\n", MODULE_NAME, cmd);
