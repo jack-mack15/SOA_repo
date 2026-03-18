@@ -27,17 +27,17 @@ struct syscall_cr_struct {
 
 struct check_syscall_cr {
     int syscall_nr;
-    bool check;
+    int check;
 };
 
 struct check_uid_cr {
     uid_t uid;
-    bool check;
+    int check;
 };
 
 struct check_progname_cr {
     char name[16];
-    bool check;
+    int check;
 };
 
 //registrazione

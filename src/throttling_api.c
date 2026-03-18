@@ -302,30 +302,30 @@ struct syscall_cr_struct *get_syscall_stats(int sys_num) {
 }
 
 //funzioni per verificare se system call, program name e user id sono stati registrati
-bool check_syscall(const int sys_num){
-    bool to_ret = false;
+int check_syscall(const int sys_num){
+    int to_ret = 0;
 
     //sanitizzazione, il controllo fatto prima
     int safe_nr = array_index_nospec(sys_num, NR_syscalls);
     
     rcu_read_lock();
     if(syscall_array[safe_nr]) {
-        to_ret = true;
+        to_ret = 1;
     }
     rcu_read_unlock();
 
     return to_ret;
 }
 
-bool check_uid(const uid_t user_id){
-    bool to_ret = false;
+int check_uid(const uid_t user_id){
+    int to_ret = 0;
     struct registered_uid *entry;
     
     rcu_read_lock();
 
     list_for_each_entry_rcu(entry, &uid_list, list) {
         if (entry->uid == user_id) {
-            to_ret = true;
+            to_ret = 1;
             break;
         }
     }
@@ -335,15 +335,15 @@ bool check_uid(const uid_t user_id){
     return to_ret;
 }
 
-bool check_progname(const char *prog_name){
-    bool to_ret = false;
+int check_progname(const char *prog_name){
+    int to_ret = 0;
     struct registered_prog *entry;
     
     rcu_read_lock();
 
     list_for_each_entry_rcu(entry, &prog_list, list) {
         if (strncmp(entry->name, prog_name, sizeof(entry->name)) == 0) {
-            to_ret = true;
+            to_ret = 1;
             break;
         }
     }

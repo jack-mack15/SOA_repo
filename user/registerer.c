@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/syscall.h>
+#include <string.h>
 
 #include "throttling.h"
 
@@ -55,24 +56,23 @@ int main() {
 
     sleep(3);
 
-    bool check = false;
 
     //struct syscall_cr_struct
     struct check_syscall_cr test_sys = {
         .syscall_nr = syscall_nr,
-        .check = false
+        .check = 0
     };
 
     struct check_uid_cr test_uid = {
         .uid = victim_uid,
-        .check = false
+        .check = 0
     };
 
     struct check_progname_cr test_prog = {
-        .check = false
+        .check = 0
     };
 
-    strscpy(test_prog.name, prog_name, sizeof(prog_name));
+    strncpy(test_prog.name, prog_name, sizeof(prog_name));
 
     //check di system call
     printf("Check della system call :%d\n", syscall_nr);
@@ -94,7 +94,7 @@ int main() {
         if (test_prog.check) {
             printf("Program name %s è registrato\n",prog_name);
         } else {
-            printf("Program name %d non è registrato\n", prog_name);
+            printf("Program name %s non è registrato\n", prog_name);
         }
     } else {
         perror("Errore: ioctl fallita! Il Kernel ha rifiutato il comando");
@@ -103,15 +103,15 @@ int main() {
     }
 
     //check di prog name non registrato
-    test_prog.check = false;
-    strscpy(test_prog.name, not_registered, sizeof(not_registered));
+    test_prog.check = 0;
+    strncpy(test_prog.name, not_registered, sizeof(not_registered));
     
     printf("Check del program name non registrato: %s\n", not_registered);
     if (ioctl(fd, IOCTL_CHECK_PROG, &test_prog) == 0) {
         if (test_prog.check) {
             printf("Program name %s è registrato\n",not_registered);
         } else {
-            printf("Program name %d non è registrato\n", not_registered);
+            printf("Program name %s non è registrato\n", not_registered);
         }
     } else {
         perror("Errore: ioctl fallita! Il Kernel ha rifiutato il comando");
@@ -124,7 +124,7 @@ int main() {
     printf("Check del uid non registrato: %d\n", victim_uid);
     if (ioctl(fd, IOCTL_CHECK_UID, &test_uid) == 0) {
         if (test_uid.check) {
-            printf("Uid %s è registrato\n",victim_uid);
+            printf("Uid %d è registrato\n",victim_uid);
         } else {
             printf("Uid %d non è registrato\n", victim_uid);
         }
