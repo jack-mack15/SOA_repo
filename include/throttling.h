@@ -13,8 +13,7 @@
 //strutture per il passaggio dei dati da kernel a user
 struct thread_stats_cr_struct {
     unsigned long sum_blocked;
-    unsigned long start_time;
-    unsigned long end_time;
+    unsigned long elapsed;
     int peak_blocked;
 };
 

@@ -25,6 +25,52 @@ int main() {
     //registrazione syscall
     int syscall_nr = 2;   //dovrebbe essere sys_open (UNISTD_64)
 
+    //test info threads
+    struct thread_stats_cr_struct test_stats = {
+        .sum_blocked = 0,
+        .elapsed = 0,
+        .peak_blocked = 0
+    };
+
+    if (ioctl(fd, IOCTL_GET_THREAD_STATS, &test_stats) == 0) {
+        printf("picco di thread bloccati: %d\n", test_stats.peak_blocked);
+        printf("media dei thread bloccanti: %lu\n", test_stats.sum_blocked / test_stats.elapsed);
+    } else {
+        perror("Errore: ioctl fallita! Il Kernel ha rifiutato il comando\n");
+        close(fd);
+        return EXIT_FAILURE;
+    }
+
+    struct syscall_cr_struct test_sys = {
+        .syscall_nr = 2
+    };
+
+    //test info syscall
+    if (ioctl(fd, IOCTL_GET_SYSCALL_STATS, &test_sys) == 0) {
+        printf("picco del tempo di blocco system call: %lu\n", test_sys.peak_delay);
+        printf("il picco subito da prog name: %s\n", test_sys.peak_prog_name);
+        printf("il picco subito da uid: %d\n", test_sys.peak_uid);
+    } else {
+        perror("Errore: ioctl fallita! Il Kernel ha rifiutato il comando");
+        close(fd);
+        return EXIT_FAILURE;
+    }
+
+    struct syscall_cr_struct test_sys2 = {
+        .syscall_nr = 3
+    };
+
+    //test info syscall non esistente
+    if (ioctl(fd, IOCTL_GET_SYSCALL_STATS, &test_sys2) == 0) {
+        printf("picco del tempo di blocco system call: %lu\n", test_sys2.peak_delay);
+        printf("il picco subito da prog name: %s\n", test_sys2.peak_prog_name);
+        printf("il picco subito da uid: %d\n", test_sys2.peak_uid);
+    } else {
+        perror("Errore: ioctl fallita! Il Kernel ha rifiutato il comando");
+        close(fd);
+        return EXIT_FAILURE;
+    }
+
 	//deregistrare syscall
     if (ioctl(fd, IOCTL_DEREGISTER_SYSCALL, &syscall_nr) != 0) {
         perror("Errore: ioctl fallita! Il Kernel ha rifiutato il comando");
@@ -40,7 +86,7 @@ int main() {
     }
 
     //deregistrazione program name
-    if (ioctl(fd, IOCTL_REGISTER_PROG, victim) != 0) {
+    if (ioctl(fd, IOCTL_REGISTER_PROG, prog_name) != 0) {
         perror("Errore: ioctl fallita! Il Kernel ha rifiutato il comando");
         close(fd);
         return EXIT_FAILURE;

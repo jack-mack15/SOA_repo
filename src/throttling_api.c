@@ -8,6 +8,7 @@
 #include <linux/cred.h>
 #include <linux/rcupdate.h>
 #include <linux/err.h>
+#include <linux/jiffies.h>
 
 #include "throttling.h"
 #include "throttling_rcu.h"
@@ -255,9 +256,9 @@ struct thread_stats_cr_struct *get_thread_stats(void){
         return ERR_PTR(-ENOMEM);
     }
 
-    to_ret->end_time = jiffies;
+    unsigned long temp = jiffies - atomic64_read(&(info_threads.start_time));
     to_ret->sum_blocked = atomic64_read(&(info_threads.sum_blocked));
-    to_ret->start_time = atomic64_read(&(info_threads.start_time));
+    to_ret->elapsed = jiffies_to_msecs(temp);
     to_ret->peak_blocked = atomic_read(&(info_threads.peak_blocked));
     return to_ret;
 }
