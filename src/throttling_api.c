@@ -475,7 +475,7 @@ int cleanup_rcu(void) {
     
     spin_lock(&write_lock);
     //forzo lo spegnimento del monitor
-    atomic_cmpxchg(&is_monitor_active, 1, 0);
+    switch_off_monitor();
 
     list_for_each_entry_safe(entry, tmp, &hacked_syscall_list, list) {
         list_del_rcu(&entry->list);
