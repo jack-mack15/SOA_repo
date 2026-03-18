@@ -160,6 +160,7 @@ module_param_array(free_entries,int,NULL,0660);//default array size already know
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0) 
 #define INST_LEN 5
 char jump_inst[INST_LEN];
+char original_inst[INST_LEN];  //aggiunto da me
 unsigned long x64_sys_call_addr;
 int offset;
 static struct kprobe kp_x64_sys_call = { .symbol_name = "x64_sys_call" };
@@ -269,6 +270,8 @@ int init_system_call_table(void) {
 	begin_syscall_table_hack();
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+
+	memcpy(original_inst, (unsigned char *)x64_sys_call_addr, INST_LEN);
 //these kernel versions are configured to avoid the usage of the syscall table 
 //this piece of code intercepts the activation of the syscall dispatcher and
 //redirects control to the function that restores the usage of the syscall table 
@@ -293,6 +296,11 @@ int init_system_call_table(void) {
 
 void cleanup_system_call_table(void) {
 
+	begin_syscall_table_hack();
         printk("%s: shutting down\n",MODNAME);
+
+        memcpy((unsigned char *)x64_sys_call_addr, original_inst, INST_LEN);
+
+        end_syscall_table_hack();
         return;
 }
