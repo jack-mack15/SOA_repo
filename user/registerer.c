@@ -120,7 +120,19 @@ int main() {
     }
     
 
-    //check di uid_t
+    //check di uid_t registrato
+    printf("Check del uid non registrato: %d\n", victim_uid);
+    if (ioctl(fd, IOCTL_CHECK_UID, &test_uid) == 0) {
+        if (test_uid.check) {
+            printf("Uid %s è registrato\n",victim_uid);
+        } else {
+            printf("Uid %d non è registrato\n", victim_uid);
+        }
+    } else {
+        perror("Errore: ioctl fallita! Il Kernel ha rifiutato il comando");
+        close(fd);
+        return EXIT_FAILURE;
+    }
 
     close(fd);
     return 0;

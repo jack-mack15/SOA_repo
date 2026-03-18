@@ -1,8 +1,6 @@
 #ifndef THROTTLING_H
 #define THROTTLING_H
 
-#include "throttling_rcu.h"
-
 #define THROTTLING_MAGIC 't'
 
 
