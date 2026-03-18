@@ -492,7 +492,7 @@ int cleanup_rcu(void) {
         kfree(entry_prog);
     }
 
-    spin_lock(&write_lock);
+    spin_unlock(&write_lock);
 
     return 0;
 }

@@ -65,17 +65,17 @@ int init_module(void) {
 }
 
 void cleanup_module(void) {
-	printk(KERN_INFO "%s: Module cleanup...\n", MODULE_NAME);
+	printk(KERN_INFO "%s: Module cleanup fase 1...\n", MODULE_NAME);
 
 	//clean up syscall table hacking
 	cleanup_system_call_table();
 
-	//clean up rcu
+	printk(KERN_INFO "%s: Module cleanup fase 2...\n", MODULE_NAME);
+	//clean up rcu e rimozione timer
 	cleanup_rcu();
 
+	printk(KERN_INFO "%s: Module cleanup fase 3...\n", MODULE_NAME);
 	//clean up dev
 	dev_cleanup();
 
-	//rimozione timer
-	core_cleanup();
 }
