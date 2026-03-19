@@ -63,15 +63,19 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
             //per ottenere statistiche di una system call
             printk(KERN_INFO "%s: Getting system call stats\n", MODULE_NAME);
 
-            struct syscall_cr_struct *sys_stats;
+            struct syscall_cr_struct *sys_stats = kmalloc(sizeof(struct syscall_cr_struct), GFP_KERNEL);
+            if(!sys_stats) {
+                printk(KERN_ERR "%s: kmalloc error in IOCTL_GET_SYSCALL_STATS\n", MODULE_NAME);
+                return -ENOMEM;
+            }
 
             if (copy_from_user(sys_stats, (void __user *)arg, sizeof(struct syscall_cr_struct))) {
                 printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
                 return -EFAULT; 
             }
             //controllo range del parametro passato in input
-            if (sys_stats.syscall_nr < 0 || sys_stats.syscall_nr >= NR_syscalls) {
-                printk(KERN_ERR "%s: Syscall number %d not valid\n",MODULE_NAME, sys_stats.syscall_nr);
+            if (sys_stats->syscall_nr < 0 || sys_stats->syscall_nr >= NR_syscalls) {
+                printk(KERN_ERR "%s: Syscall number %d not valid\n",MODULE_NAME, sys_stats->syscall_nr);
                 return -1;
             }
 
