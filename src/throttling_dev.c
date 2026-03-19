@@ -29,16 +29,16 @@ static int driver_release(struct inode *inode, struct file *file) {
     return 0;
 }
 
-/**
- *   Funzione per gestire le operazioni ioctl sul device
- *   @file: puntatore alla struttura file;
- *   @cmd: comando ioctl;
- *   @arg: argomento passato all'ioctl.
+/*
+    Funzione per gestire le operazioni ioctl sul device
+    file: puntatore alla struttura file;
+    cmd: comando ioctl;
+    arg: argomento passato all'ioctl.
  */
 static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long arg) {
 
     int param_int;
-    char prog_name[16];
+    char prog_name[TASK_COMM_LEN] = {0};
     uid_t param_uid;
 
     
@@ -51,10 +51,13 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
             struct thread_stats_cr_struct *t_stats;
 
             t_stats = get_thread_stats();
+            
+            if (IS_ERR(t_stats)) {
+                return PTR_ERR(t_stats);
+            }
         
             if (copy_to_user((void __user*)arg, t_stats, sizeof(struct thread_stats_cr_struct)) != 0) {
                 printk(KERN_ERR "Throttler: Impossibile copiare i dati in User Space!\n");
-                // Codice di errore standard POSIX per "Bad Address" (Puntatore utente invalido)
                 return -EFAULT; 
             }
             return 0;
@@ -63,39 +66,40 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
             //per ottenere statistiche di una system call
             printk(KERN_INFO "%s: Getting system call stats\n", MODULE_NAME);
 
-            struct syscall_cr_struct *sys_stats = kmalloc(sizeof(struct syscall_cr_struct), GFP_KERNEL);
-            if(!sys_stats) {
-                printk(KERN_ERR "%s: kmalloc error in IOCTL_GET_SYSCALL_STATS\n", MODULE_NAME);
-                return -ENOMEM;
-            }
+            struct syscall_cr_struct input_sys_stats;
 
-            if (copy_from_user(sys_stats, (void __user *)arg, sizeof(struct syscall_cr_struct))) {
-                kfree(sys_stats);
+            if (copy_from_user(&input_sys_stats, (void __user *)arg, sizeof(struct syscall_cr_struct))) {
                 printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
                 return -EFAULT; 
             }
+            
             //controllo range del parametro passato in input
-            if (sys_stats->syscall_nr < 0 || sys_stats->syscall_nr >= NR_syscalls) {
-                kfree(sys_stats);
-                printk(KERN_ERR "%s: Syscall number %d not valid\n",MODULE_NAME, sys_stats->syscall_nr);
+            if (input_sys_stats.syscall_nr < 0 || input_sys_stats.syscall_nr >= NR_syscalls) {
+                printk(KERN_ERR "%s: Syscall number %d not valid\n",MODULE_NAME, input_sys_stats.syscall_nr);
                 return -1;
             }
 
-            sys_stats = get_syscall_stats(sys_stats->syscall_nr);
+            //kmalloc interna a get_syscall_stats()
+            struct syscall_cr_struct *output_sys_stats = get_syscall_stats(input_sys_stats.syscall_nr);
 
-            if (!sys_stats) {
-                //system call non registrata
-                sys_stats->syscall_nr = -1;
-                sys_stats->peak_delay = 0;
-                sys_stats->peak_uid = 0;
+            if(!output_sys_stats) {
+                kfree(output_sys_stats);
+                return -ENODATA;
+            }
+
+            if (IS_ERR(output_sys_stats)) {
+                kfree(output_sys_stats);
+                return PTR_ERR(output_sys_stats);
             }
             
-            if (copy_to_user((void __user*)arg, sys_stats, sizeof(struct syscall_cr_struct)) != 0) {
-                kfree(sys_stats);
+            if (copy_to_user((void __user*)arg, output_sys_stats, sizeof(struct syscall_cr_struct)) != 0) {
+                kfree(output_sys_stats);
                 printk(KERN_ERR "%s: Failed to copy data to user space\n", MODULE_NAME);
-                // Codice di errore standard POSIX per "Bad Address" (Puntatore utente invalido)
                 return -EFAULT; 
             }
+
+            kfree(output_sys_stats);
+
             return 0;
 
         case IOCTL_CHECK_SYSCALL:
@@ -144,6 +148,10 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
                 printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
                 return -EFAULT;
             }
+
+            //per sicurezza aggiungo il terminatore di stringa
+            prog_check.name[sizeof(prog_check.name) - 1] = '\0';
+
             printk(KERN_INFO "%s: Checking program name %s\n", MODULE_NAME, prog_check.name);
 
             prog_check.check = check_progname(prog_check.name);
@@ -166,7 +174,7 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
     switch(cmd) {
         case IOCTL_REGISTER_SYSCALL:
         	//registrazione syscall
-        	if (copy_from_user(&param_int, (int __user *)arg, sizeof(int))) {
+        	if (get_user(param_int, (int __user *)arg)) {
         		printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
                 return -EFAULT; 
             }
@@ -181,7 +189,7 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
 
         case IOCTL_REGISTER_UID:
         	//registrazione user id
-        	if (copy_from_user(&param_uid, (int __user *)arg, sizeof(uid_t))) {
+        	if (get_user(param_uid, (int __user *)arg)) {
         		printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
                 return -EFAULT; 
             }
@@ -190,19 +198,26 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
 
             return register_user_id(param_uid);
 
-        case IOCTL_REGISTER_PROG:
-        	//registrazione program name
-        	if (copy_from_user(prog_name, (char __user *)arg, TASK_COMM_LEN - 1)) {
+        case IOCTL_REGISTER_PROG: {
+        	//registrazione program name 
+            
+            int copied_len = strncpy_from_user(prog_name, (const char __user *)arg, TASK_COMM_LEN - 1);
+        	if (copied_len < 0) {
         		printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
-                return -EFAULT;
+                return copied_len;
             }
+
+            //per sicurezza aggiungo il terminatore di stringa
+            prog_name[sizeof(prog_name) - 1] = '\0';
+
             printk(KERN_INFO "%s: Registering program name %s\n", MODULE_NAME, prog_name);
 
             return register_prog_name(prog_name);
+        }
 
         case IOCTL_DEREGISTER_SYSCALL:
         	//per deregistrare system call
-        	if (copy_from_user(&param_int, (int __user *)arg, sizeof(int))) {
+        	if (get_user(param_int, (int __user *)arg)) {
         		printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
                 return -EFAULT; 
             }
@@ -218,7 +233,7 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
 
         case IOCTL_DEREGISTER_UID:
         	//per deregistrazione user id
-        	if (copy_from_user(&param_uid, (int __user *)arg, sizeof(uid_t))) {
+        	if (get_user(param_uid, (int __user *)arg)) {
         		printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
                 return -EFAULT; 
             }
@@ -227,20 +242,26 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
 
         	return deregister_user_id(param_uid);
 
-        case IOCTL_DEREGISTER_PROG:
+        case IOCTL_DEREGISTER_PROG: {
         	//per deregistrare programma
-        	if (copy_from_user(prog_name, (char __user *)arg, TASK_COMM_LEN - 1)) {
-        		printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
-                return -EFAULT;
+        	int copied_len = strncpy_from_user(prog_name, (const char __user *)arg, TASK_COMM_LEN - 1);
+            
+            if (copied_len < 0) {
+                printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
+                return copied_len;
             }
+
+            //per sicurezza aggiungo il terminatore di stringa
+            prog_name[sizeof(prog_name) - 1] = '\0';
 
         	printk(KERN_INFO "%s: Deregistering program %s\n", MODULE_NAME, prog_name);
 
         	return deregister_prog_name(prog_name);
+        }
 
         case IOCTL_SET_MAX_CALLS:
         	//per impostare max syscall
-        	if (copy_from_user(&param_int, (int __user *)arg, sizeof(int))) {
+        	if (get_user(param_int, (int __user *)arg)) {
         		printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
                 return -EFAULT; 
             }

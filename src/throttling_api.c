@@ -110,7 +110,7 @@ int deregister_user_id(const uid_t user_id){
 
     //se non trovo l'uid
     printk(KERN_INFO "Throttling module: UID %u not registered, deregistration did nothing\n", user_id);
-    return 0; 
+    return -ENODATA; 
 }
 
 
@@ -183,7 +183,7 @@ int deregister_prog_name(const char *prog_name){
     }
 
     printk(KERN_INFO "Throttling module: prog name '%s' not registered, deregistration did nothing\n", prog_name);
-    return 0;
+    return -ENODATA;
 }
 
 

@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/syscall.h>
+#include <errno.h>
 
 #include "throttling.h"
 
@@ -71,9 +72,9 @@ int main() {
             printf("il picco subito da uid: %d\n", test_sys2.peak_uid);
         }
     } else {
-        perror("Errore: ioctl fallita! Il Kernel ha rifiutato il comando");
-        close(fd);
-        return EXIT_FAILURE;
+        if (errno == ENODATA) {
+            printf("system call non registrata\n");
+        }
     }
 
 	//deregistrare syscall
@@ -84,14 +85,14 @@ int main() {
     }
 
     //deregistrazione user id
-    if (ioctl(fd, IOCTL_REGISTER_UID, &victim_uid) != 0) {
+    if (ioctl(fd, IOCTL_DEREGISTER_UID, &victim_uid) != 0) {
         perror("Errore: ioctl fallita! Il Kernel ha rifiutato il comando");
         close(fd);
         return EXIT_FAILURE;
     }
 
     //deregistrazione program name
-    if (ioctl(fd, IOCTL_REGISTER_PROG, prog_name) != 0) {
+    if (ioctl(fd, IOCTL_DEREGISTER_PROG, prog_name) != 0) {
         perror("Errore: ioctl fallita! Il Kernel ha rifiutato il comando");
         close(fd);
         return EXIT_FAILURE;
