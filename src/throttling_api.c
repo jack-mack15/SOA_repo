@@ -287,17 +287,19 @@ struct syscall_cr_struct *get_syscall_stats(int sys_num) {
         }
     }
 
-    rcu_read_unlock();
-
     if(!curr) {
+        rcu_read_unlock();
         printk(KERN_ERR "Throttling module: syscall %d not hacked, no stats available\n",safe_nr);
-        return ERR_PTR(-EFAULT);
+        kfree(to_ret);
+        return NULL;
     }
 
     to_ret->syscall_nr = curr->stats->syscall_nr;
     to_ret->peak_delay = curr->stats->peak_delay;
     to_ret->peak_uid = curr->stats->peak_uid;
     strscpy(to_ret->peak_prog_name, curr->stats->peak_prog_name, sizeof(to_ret->peak_prog_name));
+
+    rcu_read_unlock();
 
     return to_ret;
 }

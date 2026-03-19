@@ -35,7 +35,7 @@ int main() {
     //test thread stats
     if (ioctl(fd, IOCTL_GET_THREAD_STATS, &test_stats) == 0) {
         printf("picco di thread bloccati: %d\n", test_stats.peak_blocked);
-        printf("media dei thread bloccanti: %.5f\n", (double)test_stats.sum_blocked / (double)test_stats.elapsed);
+        printf("media dei thread bloccanti: %.5f thread/ms\n", (double)test_stats.sum_blocked / (double)test_stats.elapsed);
     } else {
         perror("Errore: ioctl fallita! Il Kernel ha rifiutato il comando\n");
         close(fd);
@@ -48,7 +48,7 @@ int main() {
 
     //test info syscall
     if (ioctl(fd, IOCTL_GET_SYSCALL_STATS, &test_sys) == 0) {
-        printf("picco del tempo di blocco system call: %lu\n", test_sys.peak_delay);
+        printf("picco del tempo di blocco system call: %lu ms\n", test_sys.peak_delay);
         printf("il picco subito da prog name: %s\n", test_sys.peak_prog_name);
         printf("il picco subito da uid: %d\n", test_sys.peak_uid);
     } else {
@@ -63,9 +63,13 @@ int main() {
 
     //test info syscall non esistente
     if (ioctl(fd, IOCTL_GET_SYSCALL_STATS, &test_sys2) == 0) {
-        printf("picco del tempo di blocco system call: %lu\n", test_sys2.peak_delay);
-        printf("il picco subito da prog name: %s\n", test_sys2.peak_prog_name);
-        printf("il picco subito da uid: %d\n", test_sys2.peak_uid);
+        if (test_sys2.syscall_nr == -1) {
+            printf("system call non registrata\n");
+        } else {
+            printf("picco del tempo di blocco system call: %lu\n", test_sys2.peak_delay);
+            printf("il picco subito da prog name: %s\n", test_sys2.peak_prog_name);
+            printf("il picco subito da uid: %d\n", test_sys2.peak_uid);
+        }
     } else {
         perror("Errore: ioctl fallita! Il Kernel ha rifiutato il comando");
         close(fd);

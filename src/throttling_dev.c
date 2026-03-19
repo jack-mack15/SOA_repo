@@ -70,18 +70,28 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
             }
 
             if (copy_from_user(sys_stats, (void __user *)arg, sizeof(struct syscall_cr_struct))) {
+                kfree(sys_stats);
                 printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
                 return -EFAULT; 
             }
             //controllo range del parametro passato in input
             if (sys_stats->syscall_nr < 0 || sys_stats->syscall_nr >= NR_syscalls) {
+                kfree(sys_stats);
                 printk(KERN_ERR "%s: Syscall number %d not valid\n",MODULE_NAME, sys_stats->syscall_nr);
                 return -1;
             }
 
             sys_stats = get_syscall_stats(sys_stats->syscall_nr);
+
+            if (!sys_stats) {
+                //system call non registrata
+                sys_stats->syscall_nr = -1;
+                sys_stats->peak_delay = 0;
+                sys_stats->peak_uid = 0;
+            }
             
             if (copy_to_user((void __user*)arg, sys_stats, sizeof(struct syscall_cr_struct)) != 0) {
+                kfree(sys_stats);
                 printk(KERN_ERR "%s: Failed to copy data to user space\n", MODULE_NAME);
                 // Codice di errore standard POSIX per "Bad Address" (Puntatore utente invalido)
                 return -EFAULT; 
