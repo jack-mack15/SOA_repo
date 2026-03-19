@@ -65,13 +65,13 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
 
             struct syscall_cr_struct *sys_stats;
 
-            if (copy_from_user(sys_stats, (int __user *)arg, sizeof(struct syscall_cr_struct))) {
+            if (copy_from_user(sys_stats, (void __user *)arg, sizeof(struct syscall_cr_struct))) {
                 printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
                 return -EFAULT; 
             }
             //controllo range del parametro passato in input
-            if (param_int < 0 || param_int >= NR_syscalls) {
-                printk(KERN_ERR "%s: Syscall number %d not valid\n",MODULE_NAME, param_int);
+            if (sys_stats.syscall_nr < 0 || sys_stats.syscall_nr >= NR_syscalls) {
+                printk(KERN_ERR "%s: Syscall number %d not valid\n",MODULE_NAME, sys_stats.syscall_nr);
                 return -1;
             }
 
@@ -86,7 +86,7 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
 
         case IOCTL_CHECK_SYSCALL:
             struct check_syscall_cr sys_check;
-            if (copy_from_user(&sys_check, (int __user *)arg, sizeof(struct check_syscall_cr))) {
+            if (copy_from_user(&sys_check, (void __user *)arg, sizeof(struct check_syscall_cr))) {
                 printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
                 return -EFAULT; 
             }
@@ -108,7 +108,7 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
 
         case IOCTL_CHECK_UID:
             struct check_uid_cr uid_check;
-            if (copy_from_user(&uid_check, (int __user *)arg, sizeof(struct check_uid_cr))) {
+            if (copy_from_user(&uid_check, (void __user *)arg, sizeof(struct check_uid_cr))) {
                 printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
                 return -EFAULT; 
             }

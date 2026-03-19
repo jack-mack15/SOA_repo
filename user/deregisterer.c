@@ -32,9 +32,10 @@ int main() {
         .peak_blocked = 0
     };
 
+    //test thread stats
     if (ioctl(fd, IOCTL_GET_THREAD_STATS, &test_stats) == 0) {
         printf("picco di thread bloccati: %d\n", test_stats.peak_blocked);
-        printf("media dei thread bloccanti: %lu\n", test_stats.sum_blocked / test_stats.elapsed);
+        printf("media dei thread bloccanti: %.5f\n", (double)test_stats.sum_blocked / (double)test_stats.elapsed);
     } else {
         perror("Errore: ioctl fallita! Il Kernel ha rifiutato il comando\n");
         close(fd);
