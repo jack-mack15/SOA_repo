@@ -26,7 +26,7 @@ int main() {
     //registrazione syscall
     int syscall_nr = 2;   //dovrebbe essere sys_open (UNISTD_64)
 
-    /*
+    
     if (ioctl(fd, IOCTL_REGISTER_SYSCALL, &syscall_nr) != 0) {
         perror("Errore: ioctl fallita! Il Kernel ha rifiutato il comando");
         close(fd);
@@ -52,7 +52,7 @@ int main() {
         perror("Errore: ioctl fallita! Il Kernel ha rifiutato il comando");
         close(fd);
         return EXIT_FAILURE;
-    }*/
+    }
 
     sleep(3);
 

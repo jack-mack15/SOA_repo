@@ -592,6 +592,7 @@ long throttling_wrapper(const struct pt_regs *regs) {
 
         //per statistiche
         atomic64_inc(&blocked_thread);
+        atomic64_inc(&info_threads.sum_blocked);
         start_time = jiffies;
 
         int wait_ret = wait_event_interruptible(thrott_wq, 
