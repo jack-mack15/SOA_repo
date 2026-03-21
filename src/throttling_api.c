@@ -368,6 +368,7 @@ int hack_syscall(int sys_num) {
     }
     struct hacked_syscall *new_hack = kmalloc(sizeof(struct hacked_syscall), GFP_KERNEL);
     if (!new_hack) {
+        kfree(stats);
         printk(KERN_ERR "Throttling module: kmalloc error in hack_syscall\n");
         return -ENOMEM;
     }
@@ -377,7 +378,7 @@ int hack_syscall(int sys_num) {
 
     //riempo alcuni campi delle struct
     stats->syscall_nr = safe_nr;
-    stats->peak_delay = 0.0;
+    stats->peak_delay = 0;
     stats->peak_uid = 0;
     new_hack->stats = stats;
 
@@ -475,9 +476,12 @@ int cleanup_rcu(void) {
     struct registered_uid *entry_uid, *tmp2;
     struct registered_prog *entry_prog, *tmp3;
     
-    spin_lock(&write_lock);
     //forzo lo spegnimento del monitor
     switch_off_monitor();
+
+    synchronize_rcu();
+
+    spin_lock(&write_lock);
 
     list_for_each_entry_safe(entry, tmp, &hacked_syscall_list, list) {
         list_del_rcu(&entry->list);
@@ -535,18 +539,22 @@ long throttling_wrapper(const struct pt_regs *regs) {
     bool need_mon = false;
     uid_t curr_ueid;
 
+    unsigned long start_time = 0;
+    unsigned long delay = 0;
+
     struct registered_uid *entry_uid;
     struct registered_prog *entry_prog;
 
-    //questo per la corretta syscall
+    //questo per la syscall da invocare post wrapper
     int original_sysnum = regs->orig_ax;
 
     //prima cosa check sul monitor
     if(atomic_read(&is_monitor_active) == 0) {
-        //monitor off
+        //monitor off, salto diretto alla system call (no throttling)
         goto original_system_call;
     }
 
+    //questa porzione di codice viene sempre raggiunta dalle system call registrate (monitor on)
     //controllo prog name e user id
     curr_ueid = __kuid_val(current_euid());
 
@@ -562,6 +570,7 @@ long throttling_wrapper(const struct pt_regs *regs) {
         }
     }
     rcu_read_unlock();
+
     if(!skip_check) {
         //entro se non ho trovato euid
         rcu_read_lock();
@@ -579,14 +588,12 @@ long throttling_wrapper(const struct pt_regs *regs) {
     }
 
     if (!need_mon) {
-        //non è monitorato
+        //user id e program name correnti non sono sotto monitoraggio, vado alla system call
         goto original_system_call;
     }
 
-    //controllo disponibilità syscall
-    unsigned long start_time = 0;
-    unsigned long delay = 0;
-
+    
+    //controllo disponibilità system call
     while (atomic_dec_if_positive(&curr_syscalls) < 0) {
         //entro qua se non posso invocare system call, mi metto in attesa.
         
@@ -605,7 +612,7 @@ long throttling_wrapper(const struct pt_regs *regs) {
 
         if (wait_ret != 0) {
             //se si verificano altre condizioni di risveglio
-            //meglio invocare la system call?
+            //meglio invocare la system call? chiedere al prof
             atomic64_dec(&blocked_thread);
             return -EINTR; 
         }
@@ -618,13 +625,15 @@ long throttling_wrapper(const struct pt_regs *regs) {
 
         atomic64_dec(&blocked_thread);
 
-        //se arrivo qui riverifico la condizione del while
+        //se arrivo qui non è detto che ci sia ancora curr_syscall > 0, quindi 
+        //riverifico la condizione del while
     }
 
 
     goto original_system_call;
     
-    //chiamata alla system call originale
+    //chiamata alla system call. 
+    //ci arrivo sempre, cambia cosa faccio prima
     original_system_call: 
     {   
         if (delay > 0) {

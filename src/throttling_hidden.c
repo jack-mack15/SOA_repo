@@ -45,9 +45,6 @@ void epoch_handler(struct timer_list *t){
 
 	//svegliare i thread. Per ora semplice così, probabile da migliorare
 	wake_up_interruptible(&thrott_wq);
-
-	//per debug
-	//printk(KERN_INFO "aggiorno il timer del modulo\n");
 	
 	//prossima scadenza +1 secondo
 	mod_timer(&epoch_timer, jiffies + HZ);

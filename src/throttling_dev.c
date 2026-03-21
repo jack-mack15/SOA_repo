@@ -30,10 +30,10 @@ static int driver_release(struct inode *inode, struct file *file) {
 }
 
 /*
-    Funzione per gestire le operazioni ioctl sul device
-    file: puntatore alla struttura file;
-    cmd: comando ioctl;
-    arg: argomento passato all'ioctl.
+Funzione per gestire le operazioni ioctl sul device
+file: puntatore alla struttura file;    
+cmd: comando ioctl;
+arg: argomento passato all'ioctl.
  */
 static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long arg) {
 
@@ -295,9 +295,14 @@ static struct file_operations fops = {
     .unlocked_ioctl = throttling_ioctl,
 };
 
-/*
-*   Funzione per inizializzare il device per esporre le API activate, deactivate e restore.
-*/
+static char *throttling_devnode(const struct device *dev, umode_t *mode) {
+    if (mode) {
+        *mode = 0666; 
+    }
+    return NULL;
+}
+
+//funzione per registrare device
 int dev_init(void) {
     major = register_chrdev(0, MODULE_NAME, &fops);
     if(major < 0) {
@@ -305,38 +310,31 @@ int dev_init(void) {
         return major;
     }
 
-    #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
     throttling_class = class_create(MODULE_NAME);
-    #else
-    throttling_class = class_create(THIS_MODULE, MODULE_NAME);
-    #endif
+
     if (IS_ERR(throttling_class)) {
         printk(KERN_ERR "%s: Failed to create class\n", MODULE_NAME);
         unregister_chrdev(major, MODULE_NAME);
         return PTR_ERR(throttling_class);
     }
 
-    if(IS_ERR(throttling_class)) {
-        printk(KERN_ERR "%s: Failed to create class\n", MODULE_NAME);
-        unregister_chrdev(major, MODULE_NAME);
-        return PTR_ERR(throttling_class);
-    }
+    //per modificare i permessi, vedere se va bene
+    throttling_class->devnode = throttling_devnode;
 
     throttling_device = device_create(throttling_class, NULL, MKDEV(major, 0), NULL, DEVICE_NAME);
+    
     if(IS_ERR(throttling_device)) {
         printk(KERN_ERR "%s: Failed to create device\n", MODULE_NAME);
         class_destroy(throttling_class);
         unregister_chrdev(major, MODULE_NAME);
         return PTR_ERR(throttling_device);
     }
+
     printk(KERN_INFO "%s: Device registered with major number %d\n", MODULE_NAME, major);
     return 0;
 }
     
-
-/*
-*   Funzione per deregistrare il device.
-*/
+//funzione per deregistrare device
 void dev_cleanup(void) {
     
     device_destroy(throttling_class, MKDEV(major, 0));
