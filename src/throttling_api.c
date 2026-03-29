@@ -9,6 +9,7 @@
 #include <linux/rcupdate.h>
 #include <linux/err.h>
 #include <linux/jiffies.h>
+#include <linux/minmax.h>
 
 #include "throttling.h"
 #include "throttling_rcu.h"
@@ -69,7 +70,7 @@ int register_user_id(const uid_t user_id){
     
     //se non è registrato
     list_add_rcu(&new_uid->list, &uid_list);
-    
+    atomic64_inc(&uids_len);
     spin_unlock(&write_lock);
 
     printk(KERN_INFO "Throttling module: UID %u registered\n", user_id);
@@ -91,6 +92,7 @@ int deregister_user_id(const uid_t user_id){
         if (curr->uid == user_id) {
             //sgancio dalla lista (primo step)
             list_del_rcu(&curr->list);
+            atomic64_dec(&uids_len);
             to_remove = curr;
             break;
         }
@@ -356,6 +358,113 @@ int check_progname(const char *prog_name){
     return to_ret;
 }
 
+int get_lenght(const int choose) {
+    int count = 0;
+    
+    //recupero numero system call hackerate
+    if (choose == 0) {
+        struct hacked_syscall *entry_sys;
+        rcu_read_lock();
+        list_for_each_entry_rcu(entry_sys, &hacked_syscall_list, list) {
+            count++;
+        }
+        rcu_read_unlock();
+
+      //recupero numero uid registrati
+    } else if (choose == 1) {
+        struct registered_uid *entry_uid;
+        rcu_read_lock();
+        list_for_each_entry_rcu(entry_uid, &uid_list, list) {
+            count++;
+        }
+        rcu_read_unlock();
+
+      //recupero numero program name registrati
+    } else {
+        struct registered_prog *entry_prog;
+
+        rcu_read_lock();
+        list_for_each_entry_rcu(entry_prog, &prog_list, list) {
+            count++;
+        }
+        rcu_read_unlock();
+
+    }
+
+    return count;
+}
+
+int get_all_syscalls(int in_max, int **out_sys) {
+    int copied = 0;
+    return copied;
+}
+
+//riceve il numero massimo di uid che si desiderano
+int get_all_uids(int in_max, uid_t **out_uids) {
+    struct registered_uid *entry;
+    uid_t *temp_buf;
+    int copied = 0;
+
+    //prendo il minimo tra i due
+    in_max = min(atomic64_read(&uids_len),in_max);
+
+    temp_buf = kmalloc(in_max * sizeof(uid_t), GFP_KERNEL);
+    if (!temp_buf) {
+        printk(KERN_ERR "Throttling module: kmalloc error in get_all_uids\n");
+        return -ENOMEM;
+    }
+
+    rcu_read_lock();
+
+    list_for_each_entry_rcu(entry, &uid_list, list) {
+        
+        if (copied < in_max) {
+            temp_buf[copied] = entry->uid;
+            copied++;        
+        } else {
+            break;
+        }
+    }
+
+    rcu_read_unlock();
+
+    *out_uids = temp_buf;
+
+    return copied;
+}
+
+int get_all_progs(int in_max, char (**out_buf)[TASK_COMM_LEN]) {
+    char (*temp_buf)[TASK_COMM_LEN];
+    struct registered_prog *entry_prog;
+    int copied = 0;
+
+    //prendo il minimo tra i due
+    in_max = min(atomic64_read(&prog_name_len),in_max);
+
+    temp_buf = kmalloc_array(in_max, TASK_COMM_LEN, GFP_KERNEL);
+    if (!temp_buf) {
+        printk(KERN_ERR "Throttling module: kmalloc error in get_all_progs\n");
+        return -ENOMEM;
+    }
+
+    rcu_read_lock();
+
+    list_for_each_entry_rcu(entry_prog, &prog_list, list) {
+        if (copied < in_max) {
+            strscpy(temp_buf[copied], entry_prog->name, TASK_COMM_LEN);
+            copied++;
+        } else {
+            break;
+        }
+    }
+
+    rcu_read_unlock();
+
+    *out_buf = temp_buf;
+
+    return copied;
+}
+
 
 //funzione che sostituisce la origniale system call con il mio wrapper per throttling
 int hack_syscall(int sys_num) {
@@ -594,33 +703,27 @@ long throttling_wrapper(const struct pt_regs *regs) {
 
     
     //controllo disponibilità system call
-    while (atomic_dec_if_positive(&curr_syscalls) < 0) {
+    if (atomic_dec_if_positive(&curr_syscalls) < 0) {
         //entro qua se non posso invocare system call, mi metto in attesa.
         
         printk(KERN_INFO "Throttling module: syscall blocked. Now blocked threads are :%lld\n",atomic64_read(&blocked_thread));
 
-        //per statistiche
+        //per statistiche (magari sostituire con atomic_inc_return??)
         atomic64_inc(&blocked_thread);
         atomic64_inc(&info_threads.sum_blocked);
         start_time = jiffies;
 
+        //come condizione di risveglio: monitor spento oppure token disponibili e preso token
         int wait_ret = wait_event_interruptible(thrott_wq, 
-                    atomic_read(&curr_syscalls) > 0 || atomic_read(&is_monitor_active) == 0);
+                    atomic_read(&is_monitor_active) == 0 || atomic_dec_if_positive(&curr_syscalls) >= 0);
         
-        delay = delay + (jiffies - start_time);
+        delay = (jiffies - start_time);
         
 
         if (wait_ret != 0) {
             //se si verificano altre condizioni di risveglio
-            //meglio invocare la system call? chiedere al prof
             atomic64_dec(&blocked_thread);
             return -EINTR; 
-        }
-        
-        //se monitor è andato offline, "libero" la system call
-        if (atomic_read(&is_monitor_active) == 0) {
-            atomic64_dec(&blocked_thread);
-            break;
         }
 
         atomic64_dec(&blocked_thread);

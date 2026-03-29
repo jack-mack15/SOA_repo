@@ -27,7 +27,6 @@ void core_cleanup(void) {
 
 void epoch_handler(struct timer_list *t){
 
-	//si potrebbe rimuovere?
 	if (atomic_read(&is_monitor_active) == 0) return;
 
 	int max = atomic_read(&max_syscalls_per_sec);

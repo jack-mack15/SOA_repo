@@ -32,6 +32,9 @@ atomic_t is_monitor_active = ATOMIC_INIT(1);
 atomic_t max_syscalls_per_sec = ATOMIC_INIT(3);
 atomic_t curr_syscalls = ATOMIC_INIT(3);
 atomic64_t blocked_thread = ATOMIC_INIT(0);
+atomic64_t prog_name_len = ATOMIC_INIT(0);
+atomic64_t uids_len = ATOMIC_INIT(0);
+atomic_t sys_len = ATOMIC_INIT(0);
 
 struct thread_stats info_threads = {
     .peak_blocked = ATOMIC_INIT(0),

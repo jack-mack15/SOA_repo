@@ -40,6 +40,7 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
     int param_int;
     char prog_name[TASK_COMM_LEN] = {0};
     uid_t param_uid;
+    int copied = 0;
 
     
     //se è non root può accedere comunque alle statistiche e info di cosa è registrato
@@ -144,7 +145,7 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
 
         case IOCTL_CHECK_PROG:
             struct check_progname_cr prog_check;
-            if (copy_from_user(&prog_check, (char __user *)arg, sizeof(struct check_progname_cr))) {
+            if (copy_from_user(&prog_check, (void __user *)arg, sizeof(struct check_progname_cr))) {
                 printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
                 return -EFAULT;
             }
@@ -162,6 +163,152 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
             }            
 
             return 0;
+
+
+        //l'utente deve specificare quale dimensione vuole:
+            // 0 per system call registrate
+            // 1 per uid_t registrati
+            // 2 per program name registrati
+        case IOCTL_GET_NUMBER:
+            if (get_user(param_int, (int __user *)arg)) {
+                printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
+                return -EFAULT; 
+            }
+
+            if (param_int < 0 || param_int > 2) {
+                return -EINVAL;
+            } 
+
+            int temp = get_lenght(param_int);
+            if (temp < 0) {
+                return -1;
+            }
+            if (put_user(temp,(int __user*)arg)) {
+                printk(KERN_ERR "%s: Failed to copy data to user space\n", MODULE_NAME);
+                return -EFAULT; 
+            }
+            return 0;
+
+        case IOCTL_GET_ALL_SYSCALLS:
+            struct fetch_all_syscalls codes;
+            int *sys_buffer = NULL;
+
+            if (copy_from_user(&codes, (void __user *)arg, sizeof(struct fetch_all_syscalls))) {
+                printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
+                return -EFAULT; 
+            }
+
+            //controllo la struct ricevuta
+            if (codes.max == 0 || codes.list == NULL) {
+                return -EFAULT;
+            }
+
+            //qui ottengo l'array di syscall codes
+            copied = get_all_syscalls(codes.max, &sys_buffer);
+            if (copied <= 0) {
+                return copied;
+            }
+
+            //prima copy
+            if (copy_to_user(codes.list, sys_buffer, copied * sizeof(int))) {
+                printk(KERN_ERR "%s: Failed to copy data to user space\n", MODULE_NAME);
+                kfree(sys_buffer);
+                return -EFAULT;
+            }
+
+            kfree(sys_buffer);
+
+            codes.copied = copied;
+            //secoda copy
+            if (copy_to_user((struct fetch_all_syscalls __user *)arg, &codes, sizeof(struct fetch_all_syscalls))) {
+                printk(KERN_ERR "%s: Failed to copy data to user space\n", MODULE_NAME);
+                return -EFAULT; 
+            }
+
+            return 0;
+
+        case IOCTL_GET_ALL_UIDS:
+            struct fetch_all_uids uids;
+            uid_t *uids_buffer = NULL;
+
+
+            if (copy_from_user(&uids, (void __user *)arg, sizeof(struct fetch_all_uids))) {
+                printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
+                return -EFAULT; 
+            }
+
+            //controllo la struct ricevuta
+            if (uids.max == 0 || uids.list == NULL) {
+                return -EFAULT;
+            }
+
+            //qui ottengo l'array di uids
+            copied = get_all_uids(uids.max, &uids_buffer);
+            if (copied <= 0) {
+                return copied;
+            }
+
+            //prima copy
+            if (copy_to_user(uids.list, uids_buffer, copied * sizeof(uid_t))) {
+                printk(KERN_ERR "%s: Failed to copy data to user space\n", MODULE_NAME);
+                kfree(uids_buffer);
+                return -EFAULT;
+            }
+
+            kfree(uids_buffer);
+
+            uids.copied = copied;
+            //secoda copy
+            if (copy_to_user((struct fetch_all_uids __user *)arg, &uids, sizeof(struct fetch_all_uids))) {
+                printk(KERN_ERR "%s: Failed to copy data to user space\n", MODULE_NAME);
+                return -EFAULT; 
+            }
+
+            return 0;
+
+        case IOCTL_GET_ALL_PROGS:
+            struct fetch_all_progs all_progs;
+            char (*prog_buf)[TASK_COMM_LEN] = NULL;
+            int bytes_to_copy = 0;
+
+            if (copy_from_user(&all_progs, (void __user *)arg, sizeof(struct fetch_all_progs))) {
+                printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
+                return -EFAULT; 
+            }
+
+            //controllo la struct ricevuta
+            if (all_progs.max == 0 || all_progs.list == NULL) {
+                return -EFAULT;
+            }
+            
+            //qui ottengo l'array di prog names
+            copied = get_all_progs(all_progs.max, &prog_buf);
+            
+            if (copied <= 0) {
+                return copied;
+            }
+
+            //dovrebbe essere corretto?
+            bytes_to_copy = copied * TASK_COMM_LEN;
+
+            //prima copy
+            if (copy_to_user(all_progs.list, prog_buf, bytes_to_copy)) {
+                printk(KERN_ERR "%s: Failed to copy data to user space\n", MODULE_NAME);
+                kfree(prog_buf);
+                return -EFAULT;
+            }
+
+            kfree(prog_buf);
+
+            all_progs.copied = copied;
+            //secoda copy
+            if (copy_to_user((struct fetch_all_progs __user *)arg, &all_progs, sizeof(struct fetch_all_progs))) {
+                printk(KERN_ERR "%s: Failed to copy data to user space\n", MODULE_NAME);
+                return -EFAULT; 
+            }
+
+            return 0;
+
     }
 
     

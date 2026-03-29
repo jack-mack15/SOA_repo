@@ -137,3 +137,48 @@ int main() {
     close(fd);
     return 0;
 }
+
+
+/*int main() {
+    int fd;
+    unsigned int count = 0;
+    struct fetch_uids_args args;
+    uid_t *mio_array_dinamico;
+
+    if (ioctl(fd, IOCTL_GET_UID_COUNT, &count) < 0) {
+        perror("Errore nel recupero del conteggio");
+        close(fd);
+        return -1;
+    }
+    if (count == 0) {
+        printf("Nessun UID da mostrare. Esco.\n");
+        close(fd);
+        return 0;
+    }
+    mio_array_dinamico = (uid_t *)malloc(count * sizeof(uid_t));
+    if (mio_array_dinamico == NULL) {
+        perror("Errore di allocazione memoria (malloc)");
+        close(fd);
+        return -1;
+    }
+
+    args.list = mio_array_dinamico;
+    args.max_entries = count;
+    args.copied_entries = 0;
+
+    if (ioctl(fd, IOCTL_FETCH_UIDS, &args) < 0) {
+        perror("Errore durante il fetch degli array");
+        free(mio_array_dinamico);
+        close(fd);
+        return -1;
+    }
+    
+    for (unsigned int i = 0; i < args.copied_entries; i++) {
+        printf("  - UID[%u]: %d\n", i, mio_array_dinamico[i]);
+    }
+
+    free(mio_array_dinamico);
+    close(fd);
+
+    return 0;
+}*/

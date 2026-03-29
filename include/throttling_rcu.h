@@ -54,6 +54,11 @@ extern int syscall_array[];
 //variabile per info thread
 extern struct thread_stats info_threads;
 
+//variabili che indicano quante entità sono registrate
+extern atomic64_t uids_len;
+extern atomic64_t prog_name_len;
+extern atomic_t sys_len;
+
 //per ora metto un lock solo per tutte le liste. meno lock e sicuro no deadlock.
 //se ne metto 3 sicuro prestazioni migliori ma occhio deadlock.
 //CHIEDERE AL PROF 

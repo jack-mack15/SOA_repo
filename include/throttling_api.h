@@ -17,3 +17,7 @@ struct syscall_cr_struct *get_syscall_stats(int sys_num);
 int check_syscall(const int syscall_numb);
 int check_uid(const uid_t user_id);
 int check_progname(const char *prog_name);
+int get_lenght(const int choose);
+int get_all_syscalls(int max, int **output);
+int get_all_uids(int max, uid_t **output);
+int get_all_progs(int max, char (**out_buf)[TASK_COMM_LEN]);
