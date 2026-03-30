@@ -248,7 +248,7 @@ int register_prog_name(const char *prog_name){
     }
     
     list_add_rcu(&new_prog->list, &prog_list);
-    
+    atomic64_inc(&prog_name_len);
     spin_unlock(&write_lock);
 
     printk(KERN_INFO "Throttling module: prog name '%s' registered\n", prog_name);
@@ -267,6 +267,7 @@ int deregister_prog_name(const char *prog_name){
         if (strncmp(curr->name, prog_name, sizeof(curr->name)) == 0) {
             
             list_del_rcu(&curr->list); 
+            atomic64_dec(&prog_name_len);
             to_delete = curr;
             break;
         }
