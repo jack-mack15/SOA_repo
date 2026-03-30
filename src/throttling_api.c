@@ -394,7 +394,7 @@ struct syscall_cr_struct *get_syscall_stats(int sys_num) {
     }
 
     to_ret->syscall_nr = curr->stats->syscall_nr;
-    to_ret->peak_delay = curr->stats->peak_delay;
+    to_ret->peak_delay = jiffies_to_msec(curr->stats->peak_delay);
     to_ret->peak_uid = curr->stats->peak_uid;
     strscpy(to_ret->peak_prog_name, curr->stats->peak_prog_name, sizeof(to_ret->peak_prog_name));
 

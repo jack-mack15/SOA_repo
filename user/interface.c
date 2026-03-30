@@ -233,11 +233,12 @@ int main() {
                 if (ioctl(fd, IOCTL_GET_SYSCALL_STATS, &s_stats) < 0) {
                     if (errno == ENOENT) {
                         printf("System call %d non registrata\n", s_stats.syscall_nr);
+                        break;
                     }
                     perror("Errore comando IOCTL");
                 } else {
                     printf("\n--- STATISTICHE SYSCALL %d ---\n", s_stats.syscall_nr);
-                    printf("Picco Delay: %lu\n", s_stats.peak_delay);
+                    printf("Picco Delay: %lu msec\n", s_stats.peak_delay);
                     printf("Nome Prog Picco: %s\n", s_stats.peak_prog_name);
                     printf("UID Picco: %d\n", s_stats.peak_uid);
                 }
@@ -287,31 +288,32 @@ int main() {
                 else printf("Sono registrati %d elementi.\n", int_val);
                 break;
 
-            case 17: { // ESEMPIO: FETCH DEGLI UID
-                // 1. Chiedo quanti sono
-                int target = 2; // Supponiamo 2 significhi UID per il tuo IOCTL_GET_NUMBER
-                int count = target; 
+            case 16:
+                break;
+
+            case 17: { 
+                int count = 1; 
                 if (ioctl(fd, IOCTL_GET_NUMBER, &count) < 0) {
-                    perror("Errore conteggio"); break;
+                    perror("Errore comando IOCTL"); 
+                    break;
                 }
                 
                 if (count == 0) {
-                    printf("Nessun UID registrato.\n"); break;
+                    printf("Nessun UID registrato.\n"); 
+                    break;
                 }
 
-                // 2. Alloco e preparo la struct
                 struct fetch_all_uids f_uids;
                 uid_t *array_uids = malloc(count * sizeof(uid_t));
                 f_uids.list = array_uids;
                 f_uids.max = count;
                 f_uids.copied = 0;
 
-                // 3. Eseguo il fetch
                 if (ioctl(fd, IOCTL_GET_ALL_UIDS, &f_uids) < 0) {
                     perror("Errore Fetch");
                 } else {
                     printf("\n--- UID REGISTRATI (%d) ---\n", f_uids.copied);
-                    for (unsigned int i = 0; i < f_uids.copied; i++) {
+                    for (int i = 0; i < f_uids.copied; i++) {
                         printf("- UID: %d\n", array_uids[i]);
                     }
                 }
@@ -319,7 +321,8 @@ int main() {
                 break;
             }
 
-            // Puoi replicare il Case 17 per i Case 16 (Syscalls) e 18 (Programmi) cambiando i tipi!
+            case 18:
+                break;
 
             default:
                 printf("Valore inserito non valido. Inserire un valore valido\n");
