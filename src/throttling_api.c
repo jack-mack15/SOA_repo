@@ -65,7 +65,7 @@ int register_user_id(const uid_t user_id){
     	spin_unlock(&write_lock);
         kfree(new_uid);
     	printk(KERN_INFO "Throttling module: UID %u already registered\n", user_id);
-    	return 0;
+    	return -EEXIST;
     }
     
     //se non è registrato
@@ -112,7 +112,7 @@ int deregister_user_id(const uid_t user_id){
 
     //se non trovo l'uid
     printk(KERN_INFO "Throttling module: UID %u not registered, deregistration did nothing\n", user_id);
-    return -ENODATA; 
+    return -ENOENT; 
 }
 
 
@@ -185,7 +185,7 @@ int deregister_prog_name(const char *prog_name){
     }
 
     printk(KERN_INFO "Throttling module: prog name '%s' not registered, deregistration did nothing\n", prog_name);
-    return -ENODATA;
+    return -ENOENT;
 }
 
 
@@ -500,7 +500,7 @@ int hack_syscall(int sys_num) {
         kfree(stats);
         kfree(new_hack);
         printk(KERN_ERR "Throttling module: syscall %d already hacked\n",safe_nr);
-        return -EINVAL;
+        return -EEXIST;
     }
 
     begin_syscall_table_hack();
@@ -538,7 +538,7 @@ int dishack_syscall(int sys_num){
     if(!syscall_array[safe_nr]) {
         spin_unlock(&write_lock);
         printk(KERN_ERR "Throttling module: syscall %d not hacked, deregistration did nothing\n",safe_nr);
-        return -EINVAL;
+        return -ENOENT;
     }
 
     list_for_each_entry(entry, &hacked_syscall_list, list) {

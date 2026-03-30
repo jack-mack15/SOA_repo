@@ -327,7 +327,7 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
             }
             if (param_int < 0 || param_int >= NR_syscalls) {
                 printk(KERN_ERR "%s: Syscall number %d not valid\n",MODULE_NAME, param_int);
-                return -1;
+                return -EINVAL;
             }
 
             printk(KERN_INFO "%s: Registering syscall number %d\n", MODULE_NAME, param_int);
@@ -370,7 +370,7 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
             }
             if (param_int < 0 || param_int >= NR_syscalls) {
                 printk(KERN_ERR "%s: Syscall number %d not valid\n",MODULE_NAME, param_int);
-                return -1;
+                return -EINVAL;
             }
 
         	printk(KERN_INFO "%s: Deregistering syscall number %d\n", MODULE_NAME, param_int);

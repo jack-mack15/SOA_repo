@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
+#include <errno.h>
 
 #ifndef __user
 #define __user
@@ -73,6 +74,22 @@ int main() {
         switch (choice) {
 
             case 1:
+                printf("Inserire codice syscall: ");
+                scanf("%d", &int_val);
+                if (int_val < 0) {
+                    perror("Valore non valido per il comando\n");
+                    break;
+                }
+                if (ioctl(fd, IOCTL_REGISTER_SYSCALL, &int_val) < 0) {
+                    if (errno == EEXIST) {
+                        printf("Errore: La System Call %d è già registrata\n", int_val);
+                        break;
+                    }
+                    perror("Errore comando IOCTL");
+                }
+                else 
+                    printf("Syscall number %d registrata correttamente\n",int_val);
+
             case 4:
                 printf("Inserire codice syscall: ");
                 scanf("%d", &int_val);
@@ -80,13 +97,35 @@ int main() {
                     perror("Valore non valido per il comando\n");
                     break;
                 }
-                if (ioctl(fd, choice == 1 ? IOCTL_REGISTER_SYSCALL : IOCTL_DEREGISTER_SYSCALL, &int_val) < 0)
-                    perror("Errore IOCTL");
-                else
-                    printf("Syscall number %d registrata\n",int_val);
+                if (ioctl(fd, IOCTL_DEREGISTER_SYSCALL, &int_val) < 0) {
+                    if (errno == ENOENT) {
+                        printf("Errore: La System Call %d non è registrata\n", int_val);
+                        break;
+                    }
+                    perror("Errore comando IOCTL");
+                }
+                else 
+                    printf("Syscall number %d deregistrata correttamente\n",int_val);
                 break;
 
             case 2:
+                printf("Inserire UID: ");
+                scanf("%d", &uid_val);
+                if (int_val < 0) {
+                    perror("Valore non valido per il comando\n");
+                    break;
+                }
+                if (ioctl(fd, IOCTL_REGISTER_UID, &uid_val) < 0) {
+                    if (errno == EEXIST) {
+                        printf("Errore: UID %d è già registrato\n", uid_val);
+                        break;
+                    }
+                    perror("Errore comando IOCTL");
+
+                }
+                else
+                    printf("UID %u registrato correttamente\n",uid_val);
+                break;
             case 5:
                 printf("Inserire UID: ");
                 scanf("%d", &uid_val);
@@ -94,29 +133,47 @@ int main() {
                     perror("Valore non valido per il comando\n");
                     break;
                 }
-                if (ioctl(fd, choice == 2 ? IOCTL_REGISTER_UID : IOCTL_DEREGISTER_UID, &uid_val) < 0)
-                    perror("Errore IOCTL");
+                if (ioctl(fd, IOCTL_DEREGISTER_UID, &uid_val) < 0) {
+                    if (errno == ENOENT) {
+                        printf("Errore: UID %d non è registrato\n", uid_val);
+                        break;
+                    }
+                    perror("Errore comando IOCTL");
+                }
                 else
-                    printf("UID %u registrato\n",uid_val);
+                    printf("UID %u deregistrato correttamente\n",uid_val);
                 break;
 
             case 3:
+                printf("Inserire il nome del programma: ");
+                scanf("%15s", str_val);
+                if (ioctl(fd, IOCTL_REGISTER_PROG, str_val) < 0) {
+                    if (errno == EEXIST) {
+                        printf("Errore: programma %s è già registrato\n", str_val);
+                        break;
+                    }
+                    perror("Errore comando IOCTL");
+                }
+                else
+                    printf("Programma %s registrato correttamente\n", str_val);
+                break;
             case 6:
                 printf("Inserire il nome del programma: ");
                 scanf("%15s", str_val);
-                if (ioctl(fd, choice == 3 ? IOCTL_REGISTER_PROG : IOCTL_DEREGISTER_PROG, str_val) < 0)
-                    perror("Errore IOCTL");
+                if (ioctl(fd, IOCTL_DEREGISTER_PROG, str_val) < 0) {
+                    if (errno == ENOENT) {
+                        printf("Errore: programma %s è già registrato\n", str_val);
+                        break;
+                    }
+                    perror("Errore comando IOCTL");
+                }
                 else
-                    printf("Programma %s registrato\n", str_val);
+                    printf("Programma %s registrato correttamente\n", str_val);
                 break;
 
             case 7:
                 printf("Inserire il nuovo limite massimo (Token): ");
                 scanf("%d", &int_val);
-                if (int_val < 0) {
-                    perror("Valore non valido per il comando\n");
-                    break;
-                }
                 if (ioctl(fd, IOCTL_SET_MAX_CALLS, &int_val) < 0) perror("Errore IOCTL");
                 else printf("Valore Token impostato a %d.\n", int_val);
                 break;
@@ -138,7 +195,7 @@ int main() {
                 } else {
                     printf("\n--- STATISTICHE THREAD ---\n");
                     printf("Thread bloccati totali: %lu\n", t_stats.sum_blocked);
-                    printf("Media thread bloccati: %.5f\n thread/s", (double)t_stas.sum_blocked / (double)t_stats.elapsed);
+                    printf("Media thread bloccati: %.5f thread/s\n", (double)t_stats.sum_blocked / (double)t_stats.elapsed);
                     printf("Picco thread bloccati: %d\n", t_stats.peak_blocked);
                 }
                 break;
