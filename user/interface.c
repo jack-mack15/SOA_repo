@@ -288,11 +288,43 @@ int main() {
                 else printf("Sono registrati %d elementi.\n", int_val);
                 break;
 
-            case 16:
+            case 16: { 
+                int count = 0;          //per lunghezza syscall
+                if (ioctl(fd, IOCTL_GET_NUMBER, &count) < 0) {
+                    perror("Errore comando IOCTL"); 
+                    break;
+                }
+                
+                if (count == 0) {
+                    printf("Nessuna system call registrata.\n"); 
+                    break;
+                }
+
+                struct fetch_all_syscalls f_sys;
+                uid_t *array_sys = malloc(count * sizeof(int));
+                if (array_sys == NULL) {
+                    perror("Errore allocazione memoria codice interfaccia");
+                    break;
+                }
+
+                f_sys.list = array_sys;
+                f_sys.max = count;
+                f_sys.copied = 0;
+
+                if (ioctl(fd, IOCTL_GET_ALL_SYSCALLS, &f_sys) < 0) {
+                    perror("Errore Fetch");
+                } else {
+                    printf("\n--- SYSCALL REGISTRATE (%d) ---\n", f_sys.copied);
+                    for (int i = 0; i < f_sys.copied; i++) {
+                        printf("- SYSCALL: %d\n", array_sys[i]);
+                    }
+                }
+                free(array_sys);
                 break;
+            }
 
             case 17: { 
-                int count = 1; 
+                int count = 1;      //per lunghezza uids
                 if (ioctl(fd, IOCTL_GET_NUMBER, &count) < 0) {
                     perror("Errore comando IOCTL"); 
                     break;
@@ -305,6 +337,11 @@ int main() {
 
                 struct fetch_all_uids f_uids;
                 uid_t *array_uids = malloc(count * sizeof(uid_t));
+                if (array_uids == NULL) {
+                    perror("Errore allocazione memoria codice interfaccia");
+                    break;
+                }
+
                 f_uids.list = array_uids;
                 f_uids.max = count;
                 f_uids.copied = 0;
@@ -321,8 +358,40 @@ int main() {
                 break;
             }
 
-            case 18:
+            case 18: { 
+                int count = 2;      //per get lengt program name 
+                if (ioctl(fd, IOCTL_GET_NUMBER, &count) < 0) {
+                    perror("Errore comando IOCTL"); 
+                    break;
+                }
+                
+                if (count == 0) {
+                    printf("Nessun nome programma registrato.\n"); 
+                    break;
+                }
+
+                struct fetch_all_progs f_prog;
+                char (*array_prog)[TASK_COMM_LEN] = malloc(count * TASK_COMM_LEN);
+                if (array_prog == NULL) {
+                    perror("Errore allocazione memoria codice interfaccia");
+                    break;
+                }
+
+                f_prog.list = array_prog;
+                f_prog.max = count;
+                f_prog.copied = 0;
+
+                if (ioctl(fd, IOCTL_GET_ALL_PROGS, &f_prog) < 0) {
+                    perror("Errore Fetch");
+                } else {
+                    printf("\n--- PROGRAMMI REGISTRATI (%d) ---\n", f_prog.copied);
+                    for (int i = 0; i < f_prog.copied; i++) {
+                        printf("- PROG: %s\n", array_prog[i]);
+                    }
+                }
+                free(array_prog);
                 break;
+            }
 
             default:
                 printf("Valore inserito non valido. Inserire un valore valido\n");
