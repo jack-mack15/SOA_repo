@@ -331,7 +331,7 @@ int switch_off_monitor(void){
 //api che imposta il numero massimo di system call per secondo
 int set_max_syscall(int new_max){
 
-    if (new_max < 0) {
+    if (new_max <= 0) {
         printk(KERN_INFO "Throttling module: new max value must be greater than 0, u passed: %d\n",new_max);
         return -EINVAL;
     }
@@ -690,7 +690,7 @@ long throttling_wrapper(const struct pt_regs *regs) {
     if (atomic_dec_if_positive(&curr_syscalls) < 0) {
         //entro qua se non posso invocare system call, mi metto in attesa.
         
-        printk(KERN_INFO "Throttling module: syscall blocked. Now blocked threads are :%lld\n",atomic64_read(&blocked_thread));
+        //printk(KERN_INFO "Throttling module: syscall blocked. Now blocked threads are :%lld\n",atomic64_read(&blocked_thread));
 
         //per statistiche (magari sostituire con atomic_inc_return??)
         atomic64_inc(&blocked_thread);
