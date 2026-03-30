@@ -335,7 +335,7 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
                 return -EFAULT; 
             }
 
-            printk(KERN_INFO "%s: Registering User id %d\n", MODULE_NAME, param_int);
+            printk(KERN_INFO "%s: Registering User id %d\n", MODULE_NAME, param_uid);
 
             return register_user_id(param_uid);
 
