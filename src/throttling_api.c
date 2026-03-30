@@ -22,18 +22,115 @@
 void check_and_set_statistic(unsigned long delay, int original_sysnum);
 
 //api che registra system call number
-int register_system_call(const int syscall_numb){
+int register_system_call(const int sys_num) {
 
-	//hack system call table
-    hack_syscall(syscall_numb);
+    //alloco fuori dai lock le struct
+    struct syscall_stats *stats = kmalloc(sizeof(struct syscall_stats), GFP_KERNEL);
+    if (!stats) {
+        printk(KERN_ERR "Throttling module: kmalloc error in hack_syscall\n");
+        return -ENOMEM;
+    }
+    struct hacked_syscall *new_hack = kmalloc(sizeof(struct hacked_syscall), GFP_KERNEL);
+    if (!new_hack) {
+        kfree(stats);
+        printk(KERN_ERR "Throttling module: kmalloc error in hack_syscall\n");
+        return -ENOMEM;
+    }
+
+    //sanitizzazione, il controllo fatto prima
+    int safe_nr = array_index_nospec(sys_num, NR_syscalls);
+
+    //riempo alcuni campi delle struct
+    stats->syscall_nr = safe_nr;
+    stats->peak_delay = 0;
+    stats->peak_uid = 0;
+    new_hack->stats = stats;
+
+    //prendo lock in scrittura, nessuno deve scrivere oltre me
+    spin_lock(&write_lock);
+
+    //controllo se già presente e in caso annullo tutto
+    if(syscall_array[safe_nr]) {
+        spin_unlock(&write_lock);
+        kfree(stats);
+        kfree(new_hack);
+        printk(KERN_ERR "Throttling module: syscall %d already hacked\n",safe_nr);
+        return -EEXIST;
+    }
+
+    begin_syscall_table_hack();
+
+    new_hack->syscall_nr = safe_nr;
+    
+    //inserimento wrapper e salvataggio vecchia syscall table entry
+    new_hack-> original_syscall = (void *)hacked_syscall_tbl[safe_nr];
+    hacked_syscall_tbl[safe_nr] = (unsigned long *)throttling_wrapper;
+
+    //aggiorno array system call sotto osservazione
+    syscall_array[safe_nr] = 1;
+
+    end_syscall_table_hack();
+
+    //aggiunta nuova struct per il recupero
+    list_add_rcu(&new_hack->list, &hacked_syscall_list);
+    
+    spin_unlock(&write_lock);
+
     return 0;
-
 }
 
 //api che deregistra system call number
-int deregister_system_call(const int syscall_numb){
-	//dishack system call table
-    dishack_syscall(syscall_numb);
+int deregister_system_call(const int sys_num){
+
+    struct hacked_syscall *to_remove = NULL;
+    struct hacked_syscall *entry;
+
+    //sanitizzazione, il controllo fatto prima
+    int safe_nr = array_index_nospec(sys_num, NR_syscalls);
+
+    spin_lock(&write_lock);
+
+    if(!syscall_array[safe_nr]) {
+        spin_unlock(&write_lock);
+        printk(KERN_ERR "Throttling module: syscall %d not hacked, deregistration did nothing\n",safe_nr);
+        return -ENOENT;
+    }
+
+    list_for_each_entry(entry, &hacked_syscall_list, list) {
+        if (entry->syscall_nr == safe_nr) {
+            to_remove = entry;
+            break;
+        }
+    }
+
+    if(!to_remove) {
+        //se entro qua significa che la system call viene indicata come hackerata ma non ho trovato 
+        //la struct che mantiene info della originale system call
+        spin_unlock(&write_lock);
+        printk(KERN_ERR "Throttling module: syscall %d hacked but not found, something went wrong\n",safe_nr);
+        return -EFAULT;
+    }
+
+    begin_syscall_table_hack();
+
+    //inserimento wrapper e salvataggio vecchia syscall table entry
+    hacked_syscall_tbl[safe_nr] = (unsigned long *)to_remove->original_syscall;
+    
+    end_syscall_table_hack();
+
+    //segnalo system call come non hackerata
+    syscall_array[safe_nr] = 0;
+    
+    //rimozione del nodo di recupero dalla lista
+    list_del_rcu(&to_remove->list);
+
+    spin_unlock(&write_lock);
+
+    synchronize_rcu();
+    
+    kfree(to_remove->stats);
+    kfree(to_remove);
+
     return 0;
 }
 
@@ -465,119 +562,6 @@ int get_all_progs(int in_max, char (**out_buf)[TASK_COMM_LEN]) {
     return copied;
 }
 
-
-//funzione che sostituisce la origniale system call con il mio wrapper per throttling
-int hack_syscall(int sys_num) {
-
-    //alloco fuori dai lock le struct
-    struct syscall_stats *stats = kmalloc(sizeof(struct syscall_stats), GFP_KERNEL);
-    if (!stats) {
-        printk(KERN_ERR "Throttling module: kmalloc error in hack_syscall\n");
-        return -ENOMEM;
-    }
-    struct hacked_syscall *new_hack = kmalloc(sizeof(struct hacked_syscall), GFP_KERNEL);
-    if (!new_hack) {
-        kfree(stats);
-        printk(KERN_ERR "Throttling module: kmalloc error in hack_syscall\n");
-        return -ENOMEM;
-    }
-
-    //sanitizzazione, il controllo fatto prima
-    int safe_nr = array_index_nospec(sys_num, NR_syscalls);
-
-    //riempo alcuni campi delle struct
-    stats->syscall_nr = safe_nr;
-    stats->peak_delay = 0;
-    stats->peak_uid = 0;
-    new_hack->stats = stats;
-
-    //prendo lock in scrittura, nessuno deve scrivere oltre me
-    spin_lock(&write_lock);
-
-    //controllo se già presente e in caso annullo tutto
-    if(syscall_array[safe_nr]) {
-        spin_unlock(&write_lock);
-        kfree(stats);
-        kfree(new_hack);
-        printk(KERN_ERR "Throttling module: syscall %d already hacked\n",safe_nr);
-        return -EEXIST;
-    }
-
-    begin_syscall_table_hack();
-
-    new_hack->syscall_nr = safe_nr;
-    
-    //inserimento wrapper e salvataggio vecchia syscall table entry
-    new_hack-> original_syscall = (void *)hacked_syscall_tbl[safe_nr];
-    hacked_syscall_tbl[safe_nr] = (unsigned long *)throttling_wrapper;
-
-    //aggiorno array system call sotto osservazione
-    syscall_array[safe_nr] = 1;
-
-    end_syscall_table_hack();
-
-    //aggiunta nuova struct per il recupero
-    list_add_rcu(&new_hack->list, &hacked_syscall_list);
-    
-    spin_unlock(&write_lock);
-
-    return 0;
-}
-
-//funzione che ripristina la vecchia system call
-int dishack_syscall(int sys_num){
-
-    struct hacked_syscall *to_remove = NULL;
-    struct hacked_syscall *entry;
-
-    //sanitizzazione, il controllo fatto prima
-    int safe_nr = array_index_nospec(sys_num, NR_syscalls);
-
-    spin_lock(&write_lock);
-
-    if(!syscall_array[safe_nr]) {
-        spin_unlock(&write_lock);
-        printk(KERN_ERR "Throttling module: syscall %d not hacked, deregistration did nothing\n",safe_nr);
-        return -ENOENT;
-    }
-
-    list_for_each_entry(entry, &hacked_syscall_list, list) {
-        if (entry->syscall_nr == safe_nr) {
-            to_remove = entry;
-            break;
-        }
-    }
-
-    if(!to_remove) {
-        //se entro qua significa che la system call viene indicata come hackerata ma non ho trovato 
-        //la struct che mantiene info della originale system call
-        spin_unlock(&write_lock);
-        printk(KERN_ERR "Throttling module: syscall %d hacked but not found, something went wrong\n",safe_nr);
-        return -EFAULT;
-    }
-
-    begin_syscall_table_hack();
-
-    //inserimento wrapper e salvataggio vecchia syscall table entry
-    hacked_syscall_tbl[safe_nr] = (unsigned long *)to_remove->original_syscall;
-    
-    end_syscall_table_hack();
-
-    //segnalo system call come non hackerata
-    syscall_array[safe_nr] = 0;
-    
-    //rimozione del nodo di recupero dalla lista
-    list_del_rcu(&to_remove->list);
-
-    spin_unlock(&write_lock);
-
-    synchronize_rcu();
-    
-    kfree(to_remove->stats);
-    kfree(to_remove);
-
-    return 0;
-}
 
 //api che rimuove tutte le strutture dati rcu
 int cleanup_rcu(void) {

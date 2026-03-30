@@ -89,6 +89,7 @@ int main() {
                 }
                 else 
                     printf("Syscall number %d registrata correttamente\n",int_val);
+                break;
 
             case 4:
                 printf("Inserire codice syscall: ");
