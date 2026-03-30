@@ -48,6 +48,7 @@ int main() {
     int fd;
     //per la scelta
     int choice;
+    int c;
     int int_val;
     uid_t uid_val;
     char str_val[16];
@@ -148,6 +149,8 @@ int main() {
             case 3:
                 printf("Inserire il nome del programma: ");
                 scanf("%15s", str_val);
+                while ((c = getchar()) != '\n' && c != EOF);
+
                 if (ioctl(fd, IOCTL_REGISTER_PROG, str_val) < 0) {
                     if (errno == EEXIST) {
                         printf("Errore: programma %s è già registrato\n", str_val);
@@ -161,38 +164,59 @@ int main() {
             case 6:
                 printf("Inserire il nome del programma: ");
                 scanf("%15s", str_val);
+                while ((c = getchar()) != '\n' && c != EOF);
+
                 if (ioctl(fd, IOCTL_DEREGISTER_PROG, str_val) < 0) {
                     if (errno == ENOENT) {
-                        printf("Errore: programma %s è già registrato\n", str_val);
+                        printf("Errore: programma %s non è registrato\n", str_val);
                         break;
                     }
                     perror("Errore comando IOCTL");
                 }
                 else
-                    printf("Programma %s registrato correttamente\n", str_val);
+                    printf("Programma %s deregistrato correttamente\n", str_val);
                 break;
 
             case 7:
                 printf("Inserire il nuovo limite massimo (Token): ");
                 scanf("%d", &int_val);
-                if (ioctl(fd, IOCTL_SET_MAX_CALLS, &int_val) < 0) perror("Errore IOCTL");
+                if (ioctl(fd, IOCTL_SET_MAX_CALLS, &int_val) < 0) {
+                    if (errno == EINVAL) {
+                        printf("Valore non valido per il nuovo massimo.\n");
+                        printf("Valore Token deve essere intero positivo.\n");
+                        break;
+                    }
+                    perror("Errore comando IOCTL");
+                }
                 else printf("Valore Token impostato a %d.\n", int_val);
                 break;
 
             case 8:
-                if (ioctl(fd, IOCTL_MONITOR_ON) < 0) perror("Errore IOCTL");
+                if (ioctl(fd, IOCTL_MONITOR_ON) < 0) {
+                    if (errno == EALREADY) {
+                        printf("Errore: il monitor è già acceso\n");
+                        break;
+                    }
+                    perror("Errore comando IOCTL");
+                }
                 else printf("MONITOR ACCESO.\n");
                 break;
 
             case 9:
-                if (ioctl(fd, IOCTL_MONITOR_OFF) < 0) perror("Errore IOCTL");
+                if (ioctl(fd, IOCTL_MONITOR_OFF) < 0) {
+                    if (errno == EALREADY) {
+                        printf("Errore: il monitor è già spento\n");
+                        break;
+                    }
+                    perror("Errore comando IOCTL");
+                }
                 else printf("MONITOR SPENTO.\n");
                 break;
 
             case 10: {
                 struct thread_stats_cr_struct t_stats = {0};
                 if (ioctl(fd, IOCTL_GET_THREAD_STATS, &t_stats) < 0) {
-                    perror("Errore IOCTL");
+                    perror("Errore comando IOCTL");
                 } else {
                     printf("\n--- STATISTICHE THREAD ---\n");
                     printf("Thread bloccati totali: %lu\n", t_stats.sum_blocked);
@@ -204,10 +228,13 @@ int main() {
 
             case 11: {
                 struct syscall_cr_struct s_stats = {0};
-                printf("Di quale Syscall vuoi le statistiche? ");
+                printf("Inserire System call interessata: ");
                 scanf("%d", &s_stats.syscall_nr);
                 if (ioctl(fd, IOCTL_GET_SYSCALL_STATS, &s_stats) < 0) {
-                    perror("Errore IOCTL");
+                    if (errno == ENOENT) {
+                        printf("System call %d non registrata\n", s_stats.syscall_nr);
+                    }
+                    perror("Errore comando IOCTL");
                 } else {
                     printf("\n--- STATISTICHE SYSCALL %d ---\n", s_stats.syscall_nr);
                     printf("Picco Delay: %lu\n", s_stats.peak_delay);
@@ -221,22 +248,43 @@ int main() {
                 struct check_syscall_cr c_sys = {0};
                 printf("Syscall da verificare: ");
                 scanf("%d", &c_sys.syscall_nr);
-                if (ioctl(fd, IOCTL_CHECK_SYSCALL, &c_sys) < 0) perror("Errore IOCTL");
-                else printf("Esito verifica: %s (Codice %d)\n", c_sys.check ? "REGISTRATA" : "NON REGISTRATA", c_sys.check);
+                if (ioctl(fd, IOCTL_CHECK_SYSCALL, &c_sys) < 0) {
+                    perror("Errore comando IOCTL");
+                }
+                else printf("System call %d: %s\n", c_sys.syscall_nr, c_sys.check ? "REGISTRATA" : "NON REGISTRATA");
                 break;
             }
-            // ... (i case 13 e 14 sono concettualmente identici al 12, omessi per brevità, ma puoi copiarli usando check_uid_cr e check_progname_cr!)
 
+            case 13:
+                struct check_uid_cr c_uid = {0};
+                printf("UID da verificare: ");
+                scanf("%d", &c_uid.uid);
+                if (ioctl(fd, IOCTL_CHECK_UID, &c_uid) < 0) {
+                    perror("Errore comando IOCTL");
+                }
+                else printf("UID %d: %s\n", c_uid.uid, c_uid.check ? "REGISTRATO" : "NON REGISTRATO");
+                break;
+
+            case 14:
+                struct check_progname_cr c_prog = {0};
+                printf("Programma da verificare: ");
+                scanf("%15s", c_prog.name);
+                while ((c = getchar()) != '\n' && c != EOF);
+                if (ioctl(fd, IOCTL_CHECK_PROG, &c_prog) < 0) {
+                    perror("Errore comando IOCTL");
+                }
+                else printf("Programma %s: %s\n", c_prog.name, c_prog.check ? "REGISTRATO" : "NON REGISTRATO");
+                break; 
 
             case 15:
-                printf("Inserire: 0=Syscalls, 1=UIDs, 2=Progs\n");
+                printf("Inserire un intero dei seguenti 0-Syscalls, 1-UIDs, 2-Progs: ");
                 scanf("%d", &int_val);
                 if (int_val < 0 || int_val > 2) {
                     printf("Valore non valido per questo comando\n");
                     break;
                 }
                 if (ioctl(fd, IOCTL_GET_NUMBER, &int_val) < 0) perror("Errore IOCTL");
-                else printf("Il Kernel ha risposto: ci sono %d elementi.\n", int_val);
+                else printf("Sono registrati %d elementi.\n", int_val);
                 break;
 
             case 17: { // ESEMPIO: FETCH DEGLI UID
@@ -274,7 +322,7 @@ int main() {
             // Puoi replicare il Case 17 per i Case 16 (Syscalls) e 18 (Programmi) cambiando i tipi!
 
             default:
-                printf("Scelta non valida!\n");
+                printf("Valore inserito non valido. Inserire un valore valido\n");
                 break;
         }
     }

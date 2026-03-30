@@ -299,9 +299,9 @@ int switch_on_monitor(void){
         return 0;
     }
 
-    //se è spento
+    //se è già acceso
     printk(KERN_INFO "Throttling module: monitor already on\n");
-    return -1;
+    return -EALREADY;
 }
 
 //api che spegne il monitor se è acceso (altrimenti non fa nnulla)
@@ -321,9 +321,9 @@ int switch_off_monitor(void){
         return 0;
     }
 
-    //se il monitor è spento
+    //se il monitor è già spento
     printk(KERN_INFO "Throttling module: monitor already turned off\n");
-    return -1;
+    return -EALREADY;
 }
 
 
@@ -390,7 +390,7 @@ struct syscall_cr_struct *get_syscall_stats(int sys_num) {
         rcu_read_unlock();
         printk(KERN_ERR "Throttling module: syscall %d not hacked, no stats available\n",safe_nr);
         kfree(to_ret);
-        return NULL;
+        return ERR_PTR(-ENOENT);
     }
 
     to_ret->syscall_nr = curr->stats->syscall_nr;

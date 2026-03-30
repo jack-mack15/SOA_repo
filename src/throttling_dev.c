@@ -83,13 +83,7 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
             //kmalloc interna a get_syscall_stats()
             struct syscall_cr_struct *output_sys_stats = get_syscall_stats(input_sys_stats.syscall_nr);
 
-            if(!output_sys_stats) {
-                kfree(output_sys_stats);
-                return -ENODATA;
-            }
-
             if (IS_ERR(output_sys_stats)) {
-                kfree(output_sys_stats);
                 return PTR_ERR(output_sys_stats);
             }
             
