@@ -363,10 +363,12 @@ struct thread_stats_cr_struct *get_thread_stats(void){
         return ERR_PTR(-ENOMEM);
     }
 
-    //questo è ultimo intervallo accensione
-    unsigned long temp = jiffies - atomic64_read(&(info_threads.start_time));
     //questi sono gli intervalli di accensione precedenti (se ce ne fossero)
-    temp += atomic64_read(&(info_threads.elapsed));
+    unsigned long temp = atomic64_read(&(info_threads.elapsed));
+    //se serve sommo anche l'intervallo di accensione attuale
+    if (atomic_read(&is_monitor_active) != 0) {
+        temp += jiffies - atomic64_read(&(info_threads.start_time));
+    }
 
     to_ret->sum_blocked = atomic64_read(&(info_threads.sum_blocked));
     to_ret->elapsed = jiffies_to_msecs(temp);
@@ -694,7 +696,7 @@ long throttling_wrapper(const struct pt_regs *regs) {
     rcu_read_lock();
     list_for_each_entry_rcu(entry_uid, &uid_list, list) {
 
-        printk(KERN_INFO "user id corr: %u user nella lista %u\n",curr_ueid,entry_uid->uid);
+        //printk(KERN_INFO "user id corr: %u user nella lista %u\n",curr_ueid,entry_uid->uid);
 
         if (entry_uid->uid == curr_ueid) {
             skip_check = true;
