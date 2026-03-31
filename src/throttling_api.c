@@ -73,7 +73,7 @@ int register_system_call(const int sys_num) {
 
     //aggiunta nuova struct per il recupero
     list_add_rcu(&new_hack->list, &hacked_syscall_list);
-    
+    atomic_inc_return(&sys_len);
     spin_unlock(&write_lock);
 
     return 0;
@@ -124,6 +124,8 @@ int deregister_system_call(const int sys_num){
     //rimozione del nodo di recupero dalla lista
     list_del_rcu(&to_remove->list);
 
+    atomic_dec_return(&sys_len);
+
     spin_unlock(&write_lock);
 
     synchronize_rcu();
@@ -167,7 +169,7 @@ int register_user_id(const uid_t user_id){
     
     //se non è registrato
     list_add_rcu(&new_uid->list, &uid_list);
-    atomic64_inc(&uids_len);
+    atomic64_inc_return(&uids_len);
     spin_unlock(&write_lock);
 
     printk(KERN_INFO "Throttling module: UID %u registered\n", user_id);
@@ -189,7 +191,7 @@ int deregister_user_id(const uid_t user_id){
         if (curr->uid == user_id) {
             //sgancio dalla lista (primo step)
             list_del_rcu(&curr->list);
-            atomic64_dec(&uids_len);
+            atomic64_dec_return(&uids_len);
             to_remove = curr;
             break;
         }
@@ -248,7 +250,7 @@ int register_prog_name(const char *prog_name){
     }
     
     list_add_rcu(&new_prog->list, &prog_list);
-    atomic64_inc(&prog_name_len);
+    atomic64_inc_return(&prog_name_len);
     spin_unlock(&write_lock);
 
     printk(KERN_INFO "Throttling module: prog name '%s' registered\n", prog_name);
@@ -267,7 +269,7 @@ int deregister_prog_name(const char *prog_name){
         if (strncmp(curr->name, prog_name, sizeof(curr->name)) == 0) {
             
             list_del_rcu(&curr->list); 
-            atomic64_dec(&prog_name_len);
+            atomic64_dec_return(&prog_name_len);
             to_delete = curr;
             break;
         }
@@ -515,7 +517,7 @@ int get_all_syscalls(int in_max, int **out_sys) {
     }
 
     rcu_read_unlock();
-
+    printk(KERN_ERR "Throttling module: copied %d syscall\n", copied);
     *out_sys = temp_buf;
 
     return copied;
