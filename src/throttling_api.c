@@ -314,7 +314,7 @@ int switch_off_monitor(void){
         //printk(KERN_INFO "Throttling module: monitor switched off\n");
 
         //sicuro devo svegliare i thread che sono in attesa 
-        wake_up_interruptible(&thrott_wq);
+        wake_up_all(&thrott_wq);
 
         //rimuovo il timer del gestore della wait queue
         core_cleanup();
@@ -326,7 +326,6 @@ int switch_off_monitor(void){
     printk(KERN_INFO "Throttling module: monitor already turned off\n");
     return -EALREADY;
 }
-
 
 
 //api che imposta il numero massimo di system call per secondo
@@ -344,7 +343,6 @@ int set_max_syscall(int new_max){
     
     return 0;
 }
-
 
 
 //api che ritorna le statistiche
@@ -494,6 +492,32 @@ int get_lenght(const int choose) {
 
 int get_all_syscalls(int in_max, int **out_sys) {
     int copied = 0;
+    int i;
+    int *temp_buf;
+
+    in_max = min(atomic_read(&sys_len), in_max);
+    temp_buf = kmalloc(in_max * sizeof(int), GFP_KERNEL);
+    if (!temp_buf) {
+        printk(KERN_ERR "Throttling module: kmalloc error in get_all_syscalls\n");
+        return -ENOMEM;
+    }
+
+    rcu_read_lock();
+
+    for (i = 0; i < NR_syscalls; i++) {
+        if (copied >= in_max) {
+            break;
+        }
+        if (syscall_array[i]) {
+            temp_buf[copied] = i;
+            copied++;
+        }
+    }
+
+    rcu_read_unlock();
+
+    *out_sys = temp_buf;
+
     return copied;
 }
 
@@ -671,7 +695,7 @@ long throttling_wrapper(const struct pt_regs *regs) {
         list_for_each_entry_rcu(entry_prog, &prog_list, list) {
             //magari sufficiente subname?
             
-            printk(KERN_INFO "curr name: %s, nella lista ho %s\n", current->comm,entry_prog->name);
+            //printk(KERN_INFO "curr name: %s, nella lista ho %s\n", current->comm,entry_prog->name);
             
             if (strncmp(current->comm,entry_prog->name,TASK_COMM_LEN) == 0) {
                 need_mon = true;
@@ -744,7 +768,7 @@ long throttling_wrapper(const struct pt_regs *regs) {
 
         if (to_call != NULL) {
             //chiamo system call originale
-            printk(KERN_INFO "Throttling module: invoco syscall\n");
+            //printk(KERN_INFO "Throttling module: invoco syscall\n");
             long ret_value = to_call(regs);
             return ret_value;
 
