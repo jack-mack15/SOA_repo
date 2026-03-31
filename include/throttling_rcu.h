@@ -41,6 +41,7 @@ struct registered_prog {
 //struct per stats 
 struct thread_stats {
     atomic64_t sum_blocked;
+    atomic64_t elapsed;
     atomic64_t start_time;
     atomic_t peak_blocked;
 };

@@ -39,6 +39,7 @@ atomic_t sys_len = ATOMIC_INIT(0);
 struct thread_stats info_threads = {
     .peak_blocked = ATOMIC_INIT(0),
     .sum_blocked = ATOMIC_INIT(0),
+    .elapsed = ATOMIC_INIT(0),
     .start_time = ATOMIC_INIT(0)
 };
 
