@@ -1,18 +1,14 @@
 CFLAGS_WITH_INCLUDE = -I../include
 
-REG = registerer.c
-DEREG = deregisterer.c
+INTER = interface.c
 VICTIM = user.c
 
-all: reg dereg victim
-reg: $(REG)
-	gcc $(CFLAGS_WITH_INCLUDE) $(REG) -o reg
-
-dereg: $(DEREG)
-	gcc $(CFLAGS_WITH_INCLUDE) $(DEREG) -o dereg
+all: inter victim
+inter: $(INTER)
+	gcc $(CFLAGS_WITH_INCLUDE) $(INTER) -o inter
 
 victim: $(VICTIM)
 	gcc $(VICTIM) -o victim
 
 clean:
-	rm -f reg dereg victim
+	rm -f inter victim
