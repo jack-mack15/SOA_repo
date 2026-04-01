@@ -1,11 +1,11 @@
-### Throttling module
+# Throttling module
 
-##### System requirements
+### System requirements
 - Linux kernel version >= 6.3
 - make and gcc installed
 - root privileges required to load/unload the module
 
-##### Module installation
+### Module installation
 To build and load the module and test files, execute the following commands from the project's root directory:
 ```
 make
