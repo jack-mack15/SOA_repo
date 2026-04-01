@@ -15,7 +15,10 @@ cd ..
 sudo insmod throtting_module.ko
 ```
 Then, in the user directory, two files can be found: interface.c and user.c. The compiled files are inter and victim.
+
 interface.c is the interface of the module. user.c is an example file to monitor.
+
 To launch the interface.c file:
 `sudo ./inter` or `./inter`
+
 Some IOCTL commands require root privileges.
