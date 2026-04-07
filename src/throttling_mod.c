@@ -35,6 +35,8 @@ atomic64_t blocked_thread = ATOMIC_INIT(0);
 atomic64_t prog_name_len = ATOMIC_INIT(0);
 atomic64_t uids_len = ATOMIC_INIT(0);
 atomic_t sys_len = ATOMIC_INIT(0);
+atomic64_t exponential = ATOMIC_INIT(0);
+atomic_t remain = ATOMIC_INIT(0);
 
 struct thread_stats info_threads = {
     .peak_blocked = ATOMIC_INIT(0),

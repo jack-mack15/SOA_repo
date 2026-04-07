@@ -45,6 +45,9 @@ struct thread_stats {
     atomic64_t start_time;
     atomic_t peak_blocked;
 };
+//per media esponenziale
+extern atomic64_t exponential;
+extern atomic_t remain;
 
 //le liste rcu
 extern struct list_head hacked_syscall_list;

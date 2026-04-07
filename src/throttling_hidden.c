@@ -40,6 +40,22 @@ void epoch_handler(struct timer_list *t){
 		atomic_set(&(info_threads.peak_blocked), curr_blocked);
 	}
 
+	//aggiornamento media esponenziale
+	//moltiplico per 1024 (evito problemi valori bassi)
+	curr_blocked = curr_blocked << 10;
+	unsigned long temp = atomic64_read(&exponential);
+
+	if (temp == 0) {
+		//primo step
+		atomic64_set(&exponential,curr_blocked);
+	} else {
+		//me = 3/4 me + threads/4
+		//3/4 calcolati con shift right 
+		temp = temp - (temp >> 2) + (curr_blocked >> 2);
+		atomic64_set(&exponential,temp);
+	}
+
+
 	atomic_set(&curr_syscalls, max);
 
 	//svegliare i thread. Per ora semplice così, probabile da migliorare
