@@ -354,13 +354,23 @@ int set_max_syscall(int new_max){
 }
 
 
-//api che ritorna le statistiche
-struct thread_stats_cr_struct *get_thread_stats(void){
+//api che ritorna le statistiche (0 media aritmetica, 1 media esponenziale)
+struct thread_stats_cr_struct *get_thread_stats(int type){
     
     struct thread_stats_cr_struct *to_ret = kmalloc(sizeof(struct thread_stats_cr_struct), GFP_KERNEL);
     if(!to_ret) {
         printk(KERN_ERR "Throttling module: kmalloc error in get_thread_stats\n");
         return ERR_PTR(-ENOMEM);
+    }
+
+    if (type == 1) {
+        to_ret->elapsed = 0;
+        to_ret->sum_blocked = 0;
+        to_ret->peak_blocked = 0;
+        to_ret->type = 1;
+        to_ret->mean = atomic64_read(&exponential);
+
+        return to_ret;
     }
 
     //questi sono gli intervalli di accensione precedenti (se ce ne fossero)
@@ -373,6 +383,8 @@ struct thread_stats_cr_struct *get_thread_stats(void){
     to_ret->sum_blocked = atomic64_read(&(info_threads.sum_blocked));
     to_ret->elapsed = jiffies_to_msecs(temp);
     to_ret->peak_blocked = atomic_read(&(info_threads.peak_blocked));
+    to_ret->type = 0;
+    to_ret->mean = 0;
     return to_ret;
 }
 

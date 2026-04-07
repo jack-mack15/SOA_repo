@@ -13,6 +13,8 @@
 
 //strutture per il passaggio dei dati da kernel a user
 struct thread_stats_cr_struct {
+    int type;
+    unsigned long mean;
     unsigned long sum_blocked;
     unsigned long elapsed;
     int peak_blocked;
@@ -77,8 +79,8 @@ struct fetch_all_progs {
 #define IOCTL_MONITOR_OFF       _IO(THROTTLING_MAGIC, 9)                 // per switch off monitor
 
 //ottenere statistiche
-#define IOCTL_GET_THREAD_STATS         _IOR(THROTTLING_MAGIC, 10, struct thread_stats_cr_struct)
-#define IOCTL_GET_SYSCALL_STATS         _IOWR(THROTTLING_MAGIC, 11, struct syscall_cr_struct)
+#define IOCTL_GET_THREAD_STATS         _IOWR(THROTTLING_MAGIC, 10, struct thread_stats_cr_struct)
+#define IOCTL_GET_SYSCALL_STATS        _IOWR(THROTTLING_MAGIC, 11, struct syscall_cr_struct)
 
 //per verifica di ciò che è registrato, singolo
 #define IOCTL_CHECK_SYSCALL  _IOWR(THROTTLING_MAGIC, 12, struct check_syscall_cr)           // check per syscall number 

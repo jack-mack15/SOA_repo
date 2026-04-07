@@ -49,15 +49,25 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
             //per ottenere statistiche dei thread bloccati
             printk(KERN_INFO "%s: Getting thread stats\n", MODULE_NAME);
 
-            struct thread_stats_cr_struct *t_stats;
+            struct thread_stats_cr_struct input_t_stats;
 
-            t_stats = get_thread_stats();
+            if (copy_from_user(&input_t_stats, (void __user *)arg, sizeof(struct thread_stats_cr_struct))) {
+                printk(KERN_ERR "%s: Failed to copy data from user space\n", MODULE_NAME);
+                return -EFAULT; 
+            }
+
+            if (input_t_stats.type < 0 || input_t_stats.type > 1) {
+                printk(KERN_ERR "%s: Value passed to get thread not valid\n",MODULE_NAME);
+                return -EINVAL;
+            }
+
+            struct thread_stats_cr_struct *out_t_stats = get_thread_stats(input_t_stats.type);
             
-            if (IS_ERR(t_stats)) {
-                return PTR_ERR(t_stats);
+            if (IS_ERR(out_t_stats)) {
+                return PTR_ERR(out_t_stats);
             }
         
-            if (copy_to_user((void __user*)arg, t_stats, sizeof(struct thread_stats_cr_struct)) != 0) {
+            if (copy_to_user((void __user*)arg, out_t_stats, sizeof(struct thread_stats_cr_struct)) != 0) {
                 printk(KERN_ERR "Throttler: Impossibile copiare i dati in User Space!\n");
                 return -EFAULT; 
             }
@@ -77,7 +87,7 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
             //controllo range del parametro passato in input
             if (input_sys_stats.syscall_nr < 0 || input_sys_stats.syscall_nr >= NR_syscalls) {
                 printk(KERN_ERR "%s: Syscall number %d not valid\n",MODULE_NAME, input_sys_stats.syscall_nr);
-                return -1;
+                return -EINVAL;
             }
 
             //kmalloc interna a get_syscall_stats()

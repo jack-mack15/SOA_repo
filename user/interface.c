@@ -214,15 +214,25 @@ int main() {
                 break;
 
             case 10: {
+                printf("Inserire tipologia media (0 = media aritmetica, 1 = media esponenziale): ");
+                scanf("%d", &int_val);
+
                 struct thread_stats_cr_struct t_stats = {0};
+                t_stats.type = int_val;
                 if (ioctl(fd, IOCTL_GET_THREAD_STATS, &t_stats) < 0) {
                     perror("Errore comando IOCTL");
                 } else {
-                    printf("\n--- STATISTICHE THREAD ---\n");
-                    printf("Solo per debug, tempo trascorso: %lu\n",t_stats.elapsed);
-                    printf("Thread bloccati totali: %lu\n", t_stats.sum_blocked);
-                    printf("Media thread bloccati: %.5f thread/s\n", (double)t_stats.sum_blocked / (double)t_stats.elapsed);
-                    printf("Picco thread bloccati: %d\n", t_stats.peak_blocked);
+
+                    if (t_stats.type == 0) {
+                        printf("\n--- STATISTICHE THREAD ---\n");
+                        printf("Solo per debug, tempo trascorso: %lu\n",t_stats.elapsed);
+                        printf("Thread bloccati totali: %lu\n", t_stats.sum_blocked);
+                        printf("Media aritmetica thread bloccati: %.5f thread/s\n", (double)t_stats.sum_blocked / (double)t_stats.elapsed);
+                        printf("Picco thread bloccati: %d\n", t_stats.peak_blocked);
+                    } else if (t_stats.type == 1) {
+                        printf("\n--- STATISTICHE THREAD ---\n");
+                        printf("Media esponenziale threads: %lu\n", t_stats.mean);
+                    }
                 }
                 break;
             }
