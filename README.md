@@ -1,9 +1,9 @@
 # Throttling module
 
 ### System requirements
-- Linux kernel version >= 6.3
-- make and gcc installed
-- root privileges required to load/unload the module
+- Linux kernel version >= 6.3;
+- make and gcc installed;
+- root privileges required to load/unload the module;
 
 ### Module installation
 To build and load the module and test files, execute the following commands from the project's root directory:
@@ -22,3 +22,16 @@ To launch the interface.c file:
 `sudo ./inter` or `./inter`
 
 Some IOCTL commands require root privileges.
+
+### Module Operations
+This module allows the user to:
+- register/unregister syscalls;
+- register/unregister UID;
+- register/unregister program names;
+- switching on/off monitor;
+- access to statistics;
+- specify how many monitored syscall invocation per second;
+- checking registration of syscall/UID/program name;
+- listing all registered entities.
+
+All IOCTL commands are defined in the header file `throttling.h`
