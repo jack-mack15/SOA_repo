@@ -19,10 +19,11 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Maccari Gianluca");
 MODULE_DESCRIPTION("A LKM Implementing a system call throttling mechanism");
 
-//definizione variabili
-LIST_HEAD(hacked_syscall_list);
-LIST_HEAD(uid_list);
-LIST_HEAD(prog_list);
+//definizioni
+DEFINE_HASHTABLE(hacked_syscall_hash, 8);
+DEFINE_HASHTABLE(uid_hash, 8);
+DEFINE_HASHTABLE(prog_hash, 8);
+
 DEFINE_SPINLOCK(write_lock);
 DEFINE_SPINLOCK(stats_lock);
 DECLARE_WAIT_QUEUE_HEAD(thrott_wq);

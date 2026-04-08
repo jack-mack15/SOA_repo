@@ -10,6 +10,7 @@
 #include <linux/err.h>
 #include <linux/jiffies.h>
 #include <linux/minmax.h>
+#include <linux/jhash.h>
 
 #include "throttling.h"
 #include "throttling_rcu.h"
@@ -73,7 +74,7 @@ int register_system_call(const int sys_num) {
     end_syscall_table_hack();
 
     //aggiunta nuova struct per il recupero
-    list_add_rcu(&new_hack->list, &hacked_syscall_list);
+    hash_add_rcu(hacked_syscall_hash, &new_hack->hlist, new_hack->syscall_nr);
     atomic_inc_return(&sys_len);
     spin_unlock_irqrestore(&write_lock,flags);
 
@@ -97,7 +98,7 @@ int deregister_system_call(const int sys_num){
         return -ENOENT;
     }
 
-    list_for_each_entry(entry, &hacked_syscall_list, list) {
+    hash_for_each_possible_rcu(hacked_syscall_hash, entry, hlist, safe_nr) {
         if (entry->syscall_nr == safe_nr) {
             to_remove = entry;
             break;
@@ -123,7 +124,7 @@ int deregister_system_call(const int sys_num){
     syscall_array[safe_nr] = 0;
     
     //rimozione del nodo di recupero dalla lista
-    list_del_rcu(&to_remove->list);
+    hash_del_rcu(&to_remove->hlist);
 
     atomic_dec_return(&sys_len);
 
@@ -155,7 +156,7 @@ int register_user_id(const uid_t user_id){
     spin_lock_irqsave(&write_lock,flags);
 
     //verifica se già è registrato
-    list_for_each_entry(curr, &uid_list, list) {
+    hash_for_each_possible_rcu(uid_hash, curr, hlist, user_id) {
         if (curr->uid == user_id) {
             exists = true;
             break;
@@ -169,7 +170,7 @@ int register_user_id(const uid_t user_id){
     }
     
     //se non è registrato
-    list_add_rcu(&new_uid->list, &uid_list);
+    hash_add_rcu(uid_hash, &new_uid->hlist, new_uid->uid);
     atomic64_inc_return(&uids_len);
     spin_unlock_irqrestore(&write_lock,flags);
 
@@ -188,10 +189,10 @@ int deregister_user_id(const uid_t user_id){
     spin_lock_irqsave(&write_lock,flags);
 
     //ricerca e sgancio
-    list_for_each_entry(curr, &uid_list, list) {
+    hash_for_each_possible_rcu(uid_hash, curr, hlist, user_id) {
         if (curr->uid == user_id) {
             //sgancio dalla lista (primo step)
-            list_del_rcu(&curr->list);
+            hash_del_rcu(&curr->hlist);
             atomic64_dec_return(&uids_len);
             to_remove = curr;
             break;
@@ -223,6 +224,7 @@ int register_prog_name(const char *prog_name){
     struct registered_prog *new_prog;
     bool exists = false;
     unsigned long flags;
+    u32 hash_value;
 
     new_prog = kmalloc(sizeof(struct registered_prog), GFP_KERNEL);
     if (!new_prog) {
@@ -234,9 +236,12 @@ int register_prog_name(const char *prog_name){
     strncpy(new_prog->name, prog_name, sizeof(new_prog->name) - 1);
     new_prog->name[sizeof(new_prog->name) - 1] = '\0';
 
+    //valore hash per la hash table
+    hash_value = jhash(new_prog->name, strnlen(new_prog->name, TASK_COMM_LEN), 0);
+
     spin_lock_irqsave(&write_lock,flags);
 
-    list_for_each_entry(curr, &prog_list, list) {
+    hash_for_each_possible_rcu(prog_hash, curr, hlist, hash_value) {
 
         if (strncmp(curr->name, prog_name, sizeof(curr->name)) == 0) {
             exists = true;
@@ -251,7 +256,7 @@ int register_prog_name(const char *prog_name){
         return -EEXIST;
     }
     
-    list_add_rcu(&new_prog->list, &prog_list);
+    hash_add_rcu(prog_hash, &new_prog->hlist, hash_value);
     atomic64_inc_return(&prog_name_len);
     spin_unlock_irqrestore(&write_lock,flags);
 
@@ -265,13 +270,17 @@ int deregister_prog_name(const char *prog_name){
 	struct registered_prog *curr;
     struct registered_prog *to_delete = NULL;
     unsigned long flags;
+    u32 hash_value;
+
+    //valore hash per ricerca
+    hash_value = jhash(prog_name, strnlen(prog_name, TASK_COMM_LEN), 0);
 
     spin_lock_irqsave(&write_lock,flags);
 
-    list_for_each_entry(curr, &prog_list, list) {
+    hash_for_each_possible_rcu(prog_hash, curr, hlist, hash_value) {
         if (strncmp(curr->name, prog_name, sizeof(curr->name)) == 0) {
             
-            list_del_rcu(&curr->list); 
+            hash_del_rcu(&curr->hlist); 
             atomic64_dec_return(&prog_name_len);
             to_delete = curr;
             break;
@@ -405,7 +414,7 @@ struct syscall_cr_struct *get_syscall_stats(int sys_num) {
 
     rcu_read_lock();
 
-    list_for_each_entry_rcu(entry, &hacked_syscall_list, list) {
+    hash_for_each_possible_rcu(hacked_syscall_hash, entry, hlist, safe_nr) {
         if (entry->syscall_nr == safe_nr) {
             curr = entry;
             break;
@@ -451,7 +460,7 @@ int check_uid(const uid_t user_id){
     
     rcu_read_lock();
 
-    list_for_each_entry_rcu(entry, &uid_list, list) {
+    hash_for_each_possible_rcu(uid_hash, entry, hlist, user_id) {
         if (entry->uid == user_id) {
             to_ret = 1;
             break;
@@ -466,10 +475,13 @@ int check_uid(const uid_t user_id){
 int check_progname(const char *prog_name){
     int to_ret = 0;
     struct registered_prog *entry;
+    u32 hash_value;
+
+    hash_value = jhash(prog_name, strnlen(prog_name, TASK_COMM_LEN), 0);
     
     rcu_read_lock();
 
-    list_for_each_entry_rcu(entry, &prog_list, list) {
+    hash_for_each_possible_rcu(prog_hash, entry, hlist, hash_value) {
         if (strncmp(entry->name, prog_name, sizeof(entry->name)) == 0) {
             to_ret = 1;
             break;
@@ -482,39 +494,19 @@ int check_progname(const char *prog_name){
 }
 
 int get_lenght(const int choose) {
-    int count = 0;
     
     //recupero numero system call hackerate
     if (choose == 0) {
-        struct hacked_syscall *entry_sys;
-        rcu_read_lock();
-        list_for_each_entry_rcu(entry_sys, &hacked_syscall_list, list) {
-            count++;
-        }
-        rcu_read_unlock();
-
+        return atomic64_read(&uids_len);
       //recupero numero uid registrati
     } else if (choose == 1) {
-        struct registered_uid *entry_uid;
-        rcu_read_lock();
-        list_for_each_entry_rcu(entry_uid, &uid_list, list) {
-            count++;
-        }
-        rcu_read_unlock();
-
+        return atomic_read(&sys_len);
       //recupero numero program name registrati
     } else {
-        struct registered_prog *entry_prog;
-
-        rcu_read_lock();
-        list_for_each_entry_rcu(entry_prog, &prog_list, list) {
-            count++;
-        }
-        rcu_read_unlock();
-
+        return atomic64_read(&prog_name_len);
     }
 
-    return count;
+    return -1;
 }
 
 int get_all_syscalls(int in_max, int **out_sys) {
@@ -553,6 +545,7 @@ int get_all_uids(int in_max, uid_t **out_uids) {
     struct registered_uid *entry;
     uid_t *temp_buf;
     int copied = 0;
+    int curr = 0;
 
     //prendo il minimo tra i due
     in_max = min(atomic64_read(&uids_len),in_max);
@@ -565,7 +558,7 @@ int get_all_uids(int in_max, uid_t **out_uids) {
 
     rcu_read_lock();
 
-    list_for_each_entry_rcu(entry, &uid_list, list) {
+    hash_for_each(uid_hash, curr, entry, hlist) {
         
         if (copied < in_max) {
             temp_buf[copied] = entry->uid;
@@ -586,6 +579,7 @@ int get_all_progs(int in_max, char (**out_buf)[TASK_COMM_LEN]) {
     char (*temp_buf)[TASK_COMM_LEN];
     struct registered_prog *entry_prog;
     int copied = 0;
+    int curr;
 
     //prendo il minimo tra i due
     in_max = min(atomic64_read(&prog_name_len),in_max);
@@ -598,7 +592,7 @@ int get_all_progs(int in_max, char (**out_buf)[TASK_COMM_LEN]) {
 
     rcu_read_lock();
 
-    list_for_each_entry_rcu(entry_prog, &prog_list, list) {
+    hash_for_each(prog_hash, curr, entry_prog, hlist) {
         if (copied < in_max) {
             strscpy(temp_buf[copied], entry_prog->name, TASK_COMM_LEN);
             copied++;
@@ -617,10 +611,12 @@ int get_all_progs(int in_max, char (**out_buf)[TASK_COMM_LEN]) {
 
 //api che rimuove tutte le strutture dati rcu
 int cleanup_rcu(void) {
-    struct hacked_syscall *entry, *tmp;
-    struct registered_uid *entry_uid, *tmp2;
-    struct registered_prog *entry_prog, *tmp3;
+    struct hacked_syscall *entry;
+    struct registered_uid *entry_uid;
+    struct registered_prog *entry_prog;
+    struct hlist_node *tmp;
     unsigned long flags;
+    int curr = 0;
     
     //forzo lo spegnimento del monitor
     switch_off_monitor();
@@ -629,18 +625,18 @@ int cleanup_rcu(void) {
 
     spin_lock_irqsave(&write_lock,flags);
 
-    list_for_each_entry_safe(entry, tmp, &hacked_syscall_list, list) {
-        list_del_rcu(&entry->list);
+    hash_for_each_safe(hacked_syscall_hash, curr, tmp, entry, hlist) {
+        hash_del_rcu(&entry->hlist);
         kfree(entry);
     }
 
-    list_for_each_entry_safe(entry_uid, tmp2, &uid_list, list) {
-        list_del_rcu(&entry_uid->list);
+    hash_for_each_safe(uid_hash, curr, tmp, entry_uid, hlist) {
+        hash_del_rcu(&entry_uid->hlist);
         kfree(entry_uid);
     }
 
-    list_for_each_entry_safe(entry_prog, tmp3, &prog_list, list) {
-        list_del_rcu(&entry_prog->list);
+    hash_for_each_safe(prog_hash, curr, tmp, entry_prog, hlist) {
+        hash_del_rcu(&entry_prog->hlist);
         kfree(entry_prog);
     }
 
@@ -655,7 +651,7 @@ void check_and_set_statistic(unsigned long delay, int original_sysnum) {
     unsigned long flags;
     rcu_read_lock();
         
-    list_for_each_entry_rcu(entry_sys,&hacked_syscall_list,list) {
+    hash_for_each_possible_rcu(hacked_syscall_hash, entry_sys, hlist, original_sysnum) {
         if(entry_sys->syscall_nr == original_sysnum) {
             
             if (entry_sys->stats->peak_delay < delay) {
@@ -692,6 +688,8 @@ long throttling_wrapper(const struct pt_regs *regs) {
     struct registered_uid *entry_uid;
     struct registered_prog *entry_prog;
 
+    u32 hash_value;
+
     //questo per la syscall da invocare post wrapper
     int original_sysnum = regs->orig_ax;
 
@@ -706,7 +704,7 @@ long throttling_wrapper(const struct pt_regs *regs) {
     curr_ueid = __kuid_val(current_euid());
 
     rcu_read_lock();
-    list_for_each_entry_rcu(entry_uid, &uid_list, list) {
+    hash_for_each_possible_rcu(uid_hash, entry_uid, hlist, curr_ueid) {
 
         //printk(KERN_INFO "user id corr: %u user nella lista %u\n",curr_ueid,entry_uid->uid);
 
@@ -720,8 +718,10 @@ long throttling_wrapper(const struct pt_regs *regs) {
 
     if(!skip_check) {
         //entro se non ho trovato euid
+        hash_value = jhash(current->comm, strnlen(current->comm, TASK_COMM_LEN), 0);
+
         rcu_read_lock();
-        list_for_each_entry_rcu(entry_prog, &prog_list, list) {
+        hash_for_each_possible_rcu(prog_hash, entry_prog, hlist, hash_value) {
             //magari sufficiente subname?
             
             //printk(KERN_INFO "curr name: %s, nella lista ho %s\n", current->comm,entry_prog->name);
@@ -786,7 +786,7 @@ long throttling_wrapper(const struct pt_regs *regs) {
         long (*to_call)(const struct pt_regs *) = NULL;
         rcu_read_lock();
         
-        list_for_each_entry_rcu(entry_sys,&hacked_syscall_list,list) {
+        hash_for_each_possible_rcu(hacked_syscall_hash, entry_sys, hlist, original_sysnum) {
             if(entry_sys->syscall_nr == original_sysnum) {
                 to_call = entry_sys->original_syscall;
                 break;

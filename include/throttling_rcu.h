@@ -1,11 +1,11 @@
 #ifndef THROTTLER_H
 #define THROTTLER_H
 
-#include <linux/list.h>
 #include <linux/spinlock.h>
 #include <linux/types.h>
 #include <linux/rcupdate.h>
 #include <linux/types.h>
+#include <linux/hashtable.h>
 
 //uso tre strutture dati differenti per syscall number, user id e program names
 //una struttura dati aggiuntiva per ricordarmi le system call hackerate
@@ -23,19 +23,19 @@ struct hacked_syscall {
     int syscall_nr;
     asmlinkage long (*original_syscall)(const struct pt_regs *);
     struct syscall_stats *stats;
-    struct list_head list;
+    struct hlist_node hlist;
 };
 
 //struct per user id
 struct registered_uid {
     uid_t uid;
-    struct list_head list;
+    struct hlist_node hlist;
 };
 
 //struct per program names
 struct registered_prog {
     char name[16];
-    struct list_head list;
+    struct hlist_node hlist;
 };
 
 //struct per stats 
@@ -49,10 +49,11 @@ struct thread_stats {
 extern atomic64_t exponential;
 extern atomic_t remain;
 
-//le liste rcu
-extern struct list_head hacked_syscall_list;
-extern struct list_head uid_list;
-extern struct list_head prog_list;
+//hash table
+extern DECLARE_HASHTABLE(hacked_syscall_hash, 8);
+extern DECLARE_HASHTABLE(uid_hash, 8);
+extern DECLARE_HASHTABLE(prog_hash, 8);
+
 //array dei tutte le system call monitorate
 extern int syscall_array[];
 //variabile per info thread
