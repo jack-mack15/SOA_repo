@@ -687,6 +687,9 @@ long throttling_wrapper(const struct pt_regs *regs) {
 
     struct registered_uid *entry_uid;
     struct registered_prog *entry_prog;
+    struct hacked_syscall *entry_sys;
+
+    long (*to_call)(const struct pt_regs *) = NULL;
 
     u32 hash_value;
 
@@ -733,6 +736,19 @@ long throttling_wrapper(const struct pt_regs *regs) {
         }
         rcu_read_unlock();
     }
+
+
+    //recupero system call originale
+    rcu_read_lock();
+        
+    hash_for_each_possible_rcu(hacked_syscall_hash, entry_sys, hlist, original_sysnum) {
+        if(entry_sys->syscall_nr == original_sysnum) {
+            to_call = entry_sys->original_syscall;
+            break;
+        }
+    }
+        
+    rcu_read_unlock();
 
     if (!need_mon) {
         //user id e program name correnti non sono sotto monitoraggio, vado alla system call
@@ -781,19 +797,7 @@ long throttling_wrapper(const struct pt_regs *regs) {
             //aggiorno statistica della system call
             check_and_set_statistic(delay,original_sysnum);
         }
-
-        struct hacked_syscall *entry_sys;
-        long (*to_call)(const struct pt_regs *) = NULL;
-        rcu_read_lock();
         
-        hash_for_each_possible_rcu(hacked_syscall_hash, entry_sys, hlist, original_sysnum) {
-            if(entry_sys->syscall_nr == original_sysnum) {
-                to_call = entry_sys->original_syscall;
-                break;
-            }
-        }
-        
-        rcu_read_unlock();
 
         if (to_call != NULL) {
             //chiamo system call originale

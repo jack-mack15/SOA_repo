@@ -225,13 +225,13 @@ int main() {
 
                     if (t_stats.type == 0) {
                         printf("\n--- STATISTICHE THREAD ---\n");
-                        printf("Solo per debug, tempo trascorso: %lu\n",t_stats.elapsed);
+                        //printf("Solo per debug, tempo trascorso: %lu\n",t_stats.elapsed);
                         printf("Thread bloccati totali: %lu\n", t_stats.sum_blocked);
                         printf("Media aritmetica thread bloccati: %.5f thread/s\n", (double)t_stats.sum_blocked / (double)t_stats.elapsed);
                         printf("Picco thread bloccati: %d\n", t_stats.peak_blocked);
                     } else if (t_stats.type == 1) {
                         printf("\n--- STATISTICHE THREAD ---\n");
-                        printf("Media esponenziale threads: %lu\n", t_stats.mean);
+                        printf("Media esponenziale threads: %.5f\n", (double)t_stats.mean / (double) 1024);
                     }
                 }
                 break;

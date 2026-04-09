@@ -62,7 +62,6 @@ int main() {
         pthread_join(threads[i], NULL);
     }
 
-    printf("\nfine test multithread\n");
     return EXIT_SUCCESS;
 }
 
