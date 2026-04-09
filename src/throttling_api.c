@@ -685,13 +685,9 @@ long throttling_wrapper(const struct pt_regs *regs) {
     unsigned long start_time = 0;
     unsigned long delay = 0;
 
-    struct registered_uid *entry_uid;
-    struct registered_prog *entry_prog;
     struct hacked_syscall *entry_sys;
 
     long (*to_call)(const struct pt_regs *) = NULL;
-
-    u32 hash_value;
 
     //questo per la syscall da invocare post wrapper
     int original_sysnum = regs->orig_ax;
@@ -706,35 +702,13 @@ long throttling_wrapper(const struct pt_regs *regs) {
     //controllo prog name e user id
     curr_ueid = __kuid_val(current_euid());
 
-    rcu_read_lock();
-    hash_for_each_possible_rcu(uid_hash, entry_uid, hlist, curr_ueid) {
 
-        //printk(KERN_INFO "user id corr: %u user nella lista %u\n",curr_ueid,entry_uid->uid);
-
-        if (entry_uid->uid == curr_ueid) {
-            skip_check = true;
-            need_mon = true;
-            break;
-        }
-    }
-    rcu_read_unlock();
+    need_mon = check_uid(curr_ueid);
+    skip_check = need_mon;
 
     if(!skip_check) {
         //entro se non ho trovato euid
-        hash_value = jhash(current->comm, strnlen(current->comm, TASK_COMM_LEN), 0);
-
-        rcu_read_lock();
-        hash_for_each_possible_rcu(prog_hash, entry_prog, hlist, hash_value) {
-            //magari sufficiente subname?
-            
-            //printk(KERN_INFO "curr name: %s, nella lista ho %s\n", current->comm,entry_prog->name);
-            
-            if (strncmp(current->comm,entry_prog->name,TASK_COMM_LEN) == 0) {
-                need_mon = true;
-                break;
-            }
-        }
-        rcu_read_unlock();
+        need_mon = check_progname(current->comm);
     }
 
 
