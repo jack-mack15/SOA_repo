@@ -19,19 +19,15 @@ void *spam_open(void *arg) {
     printf("[Thread %d] Inizio a spammare la system call 2 (open)...\n", id);
 
     while(i < NUM_OPENS_PER_THREAD) {
-        // Accesso crudo alla sys_open
         test_fd = syscall(SYS_open, "test.txt", O_CREAT | O_RDWR, 0644);
         
         if (test_fd < 0) {
             perror("Errore nell'apertura del file di test");
         } else {
-            // È importante chiudere solo se l'apertura è andata a buon fine!
             close(test_fd);
         }
 
         i++;
-        
-        // usleep(50000); // Toglilo dal commento se vuoi rallentarli un po'
     }
 
     printf("[Thread %d] Ho eseguito %d\n", id, i);
@@ -64,29 +60,3 @@ int main() {
 
     return EXIT_SUCCESS;
 }
-
-
-//primo test single thread
-/*int main() {
-    printf("Sono il programma VITTIMA. Il mio PID è %d\n", getpid());
-    printf("Il mio User ID è %d\n", getuid());
-    printf("Inizio a spammare la system call 2 (open)...\n");
-
-    int test_fd;
-    int i = 0;
-
-    while(i < 30) {
-        //accesso alla sys open
-        test_fd = syscall(SYS_open, "test.txt", O_CREAT | O_RDWR, 0644);
-        
-        if (test_fd < 0) {
-            perror("Errore nell'apertura del file di test");
-        }
-
-        //usleep(50000);
-        close(test_fd);
-        i++;
-    }
-
-    return 0;
-}*/
