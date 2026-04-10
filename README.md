@@ -1,11 +1,11 @@
-# Throttling module
+# Throttling Module
 
-### System requirements
+## 1. System Requirements
 - Linux kernel version >= 6.3;
 - make and gcc installed;
 - root privileges required to load/unload the module;
 
-### Module installation
+## 2. Module Installation
 To build and load the module and test files, execute the following commands from the project's root directory:
 ```
 make
@@ -23,7 +23,7 @@ To launch the interface.c file:
 
 Some IOCTL commands require root privileges.
 
-### Module Operations
+## 3. Module Operations
 This module allows the user to:
 - register/unregister syscalls;
 - register/unregister UID;
@@ -35,3 +35,21 @@ This module allows the user to:
 - listing all registered entities.
 
 All IOCTL commands are defined in the header file `throttling.h`
+
+## 4. Repository Structure
+- `include/` contains all the header files:
+  - `syscall_table_hack.h` and `vtpmo.h` expose function to manipulate system call table and the pointer to the system call table;
+  - `throttling.h` describes all IOCTL commands and data structures to use in cross ring data moves;
+  - `throttling_api.c` describes all internal kernel functions of the module;
+  - `throttling_dev.h` exposes two functions for initialization and clean up of the device;
+  - `throttling_hidden.h` exposes functions of the timer mechanism of the module and the wait queue;
+  - `throttling_rcu.h` exposes all the data structures and variables accessed via RCU.
+- `src/` contains all the kernel code:
+  - `my_usctm.c` and `my_vtpmo.c` files contain the code for system call table discovery (code of Professor Quaglia Francesco);
+  - `throttling_api.c`contains the implementation of all the internal kernel functions of the module;
+  - `throttling_dev.c` contains the implementation of the api of the device and the code that handles IOCTL commands;
+  - `throttling_hidden.c` contains the implementation of the functions that manage the timer and wait queue;
+  - `throttling_mod.c` contains the implementation of the init_module() and cleanup_module() api and all the declaration of data structures and variables of the module.
+- `user/`:
+  - `interface.c` contains the code of the interface user level that interacts with the module;
+  - `user.c` is a simple example file that has to be monitored.
