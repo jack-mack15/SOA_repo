@@ -24,7 +24,6 @@ void check_and_set_statistic(unsigned long delay, int original_sysnum);
 
 //api che registra system call number
 int register_system_call(const int sys_num) {
-    unsigned long flags;
 
     //alloco fuori dai lock le struct
     struct syscall_stats *stats = kmalloc(sizeof(struct syscall_stats), GFP_KERNEL);
@@ -49,11 +48,11 @@ int register_system_call(const int sys_num) {
     new_hack->stats = stats;
 
     //prendo lock in scrittura, nessuno deve scrivere oltre me
-    spin_lock_irqsave(&write_lock,flags);
+    spin_lock(&write_lock);
 
     //controllo se già presente e in caso annullo tutto
     if(syscall_array[safe_nr]) {
-        spin_unlock_irqrestore(&write_lock,flags);
+        spin_unlock(&write_lock);
         kfree(stats);
         kfree(new_hack);
         printk(KERN_ERR "Throttling module: syscall %d already hacked\n",safe_nr);
@@ -76,24 +75,23 @@ int register_system_call(const int sys_num) {
     //aggiunta nuova struct per il recupero
     hash_add_rcu(hacked_syscall_hash, &new_hack->hlist, new_hack->syscall_nr);
     atomic_inc_return(&sys_len);
-    spin_unlock_irqrestore(&write_lock,flags);
+    spin_unlock(&write_lock);
 
     return 0;
 }
 
 //api che deregistra system call number
 int deregister_system_call(const int sys_num){
-    unsigned long flags;
     struct hacked_syscall *to_remove = NULL;
     struct hacked_syscall *entry;
 
     //sanitizzazione, il controllo fatto prima
     int safe_nr = array_index_nospec(sys_num, NR_syscalls);
 
-    spin_lock_irqsave(&write_lock,flags);
+    spin_lock(&write_lock);
 
     if(!syscall_array[safe_nr]) {
-        spin_unlock_irqrestore(&write_lock,flags);
+        spin_unlock(&write_lock);
         printk(KERN_ERR "Throttling module: syscall %d not hacked, deregistration did nothing\n",safe_nr);
         return -ENOENT;
     }
@@ -108,7 +106,7 @@ int deregister_system_call(const int sys_num){
     if(!to_remove) {
         //se entro qua significa che la system call viene indicata come hackerata ma non ho trovato 
         //la struct che mantiene info della originale system call
-        spin_unlock_irqrestore(&write_lock,flags);
+        spin_unlock(&write_lock);
         printk(KERN_ERR "Throttling module: syscall %d hacked but not found, something went wrong\n",safe_nr);
         return -EFAULT;
     }
@@ -128,7 +126,7 @@ int deregister_system_call(const int sys_num){
 
     atomic_dec_return(&sys_len);
 
-    spin_unlock_irqrestore(&write_lock,flags);
+    spin_unlock(&write_lock);
 
     synchronize_rcu();
     
@@ -140,7 +138,6 @@ int deregister_system_call(const int sys_num){
 
 //api che registra user id
 int register_user_id(const uid_t user_id){
-    unsigned long flags;
 	struct registered_uid *curr;
 	struct registered_uid *new_uid;
 	bool exists = false;
@@ -153,7 +150,7 @@ int register_user_id(const uid_t user_id){
 
     new_uid->uid = user_id;
 
-    spin_lock_irqsave(&write_lock,flags);
+    spin_lock(&write_lock);
 
     //verifica se già è registrato
     hash_for_each_possible_rcu(uid_hash, curr, hlist, user_id) {
@@ -163,7 +160,7 @@ int register_user_id(const uid_t user_id){
         }
     }
     if (exists) {
-    	spin_unlock_irqrestore(&write_lock,flags);
+    	spin_unlock(&write_lock);
         kfree(new_uid);
     	printk(KERN_INFO "Throttling module: UID %u already registered\n", user_id);
     	return -EEXIST;
@@ -172,7 +169,7 @@ int register_user_id(const uid_t user_id){
     //se non è registrato
     hash_add_rcu(uid_hash, &new_uid->hlist, new_uid->uid);
     atomic64_inc_return(&uids_len);
-    spin_unlock_irqrestore(&write_lock,flags);
+    spin_unlock(&write_lock);
 
     printk(KERN_INFO "Throttling module: UID %u registered\n", user_id);
     
@@ -182,11 +179,10 @@ int register_user_id(const uid_t user_id){
 
 //api che deregistra user id
 int deregister_user_id(const uid_t user_id){
-    unsigned long flags;
     struct registered_uid *curr;
     struct registered_uid *to_remove = NULL;
 
-    spin_lock_irqsave(&write_lock,flags);
+    spin_lock(&write_lock);
 
     //ricerca e sgancio
     hash_for_each_possible_rcu(uid_hash, curr, hlist, user_id) {
@@ -199,7 +195,7 @@ int deregister_user_id(const uid_t user_id){
         }
     }
 
-    spin_unlock_irqrestore(&write_lock,flags);
+    spin_unlock(&write_lock);
 
     if (to_remove) {
         //attesa lettori
@@ -223,7 +219,7 @@ int register_prog_name(const char *prog_name){
     struct registered_prog *curr;
     struct registered_prog *new_prog;
     bool exists = false;
-    unsigned long flags;
+
     u32 hash_value;
 
     new_prog = kmalloc(sizeof(struct registered_prog), GFP_KERNEL);
@@ -239,7 +235,7 @@ int register_prog_name(const char *prog_name){
     //valore hash per la hash table
     hash_value = jhash(new_prog->name, strnlen(new_prog->name, TASK_COMM_LEN), 0);
 
-    spin_lock_irqsave(&write_lock,flags);
+    spin_lock(&write_lock);
 
     hash_for_each_possible_rcu(prog_hash, curr, hlist, hash_value) {
 
@@ -250,7 +246,7 @@ int register_prog_name(const char *prog_name){
     }
 
     if (exists) {
-        spin_unlock_irqrestore(&write_lock,flags);
+        spin_unlock(&write_lock);
         kfree(new_prog);
         printk(KERN_INFO "Throttling module: prog name '%s' already registered\n", prog_name);
         return -EEXIST;
@@ -258,7 +254,7 @@ int register_prog_name(const char *prog_name){
     
     hash_add_rcu(prog_hash, &new_prog->hlist, hash_value);
     atomic64_inc_return(&prog_name_len);
-    spin_unlock_irqrestore(&write_lock,flags);
+    spin_unlock(&write_lock);
 
     printk(KERN_INFO "Throttling module: prog name '%s' registered\n", prog_name);
     return 0;
@@ -269,13 +265,12 @@ int register_prog_name(const char *prog_name){
 int deregister_prog_name(const char *prog_name){
 	struct registered_prog *curr;
     struct registered_prog *to_delete = NULL;
-    unsigned long flags;
     u32 hash_value;
 
     //valore hash per ricerca
     hash_value = jhash(prog_name, strnlen(prog_name, TASK_COMM_LEN), 0);
 
-    spin_lock_irqsave(&write_lock,flags);
+    spin_lock(&write_lock);
 
     hash_for_each_possible_rcu(prog_hash, curr, hlist, hash_value) {
         if (strncmp(curr->name, prog_name, sizeof(curr->name)) == 0) {
@@ -287,7 +282,7 @@ int deregister_prog_name(const char *prog_name){
         }
     }
 
-    spin_unlock_irqrestore(&write_lock,flags);
+    spin_unlock(&write_lock);
 
     if (to_delete) {
         synchronize_rcu(); 
@@ -615,7 +610,6 @@ int cleanup_rcu(void) {
     struct registered_uid *entry_uid;
     struct registered_prog *entry_prog;
     struct hlist_node *tmp;
-    unsigned long flags;
     int curr = 0;
     
     //forzo lo spegnimento del monitor
@@ -623,7 +617,7 @@ int cleanup_rcu(void) {
 
     synchronize_rcu();
 
-    spin_lock_irqsave(&write_lock,flags);
+    spin_lock(&write_lock);
 
     hash_for_each_safe(hacked_syscall_hash, curr, tmp, entry, hlist) {
         hash_del_rcu(&entry->hlist);
@@ -640,7 +634,7 @@ int cleanup_rcu(void) {
         kfree(entry_prog);
     }
 
-    spin_unlock_irqrestore(&write_lock,flags);
+    spin_unlock(&write_lock);
 
     return 0;
 }
@@ -648,7 +642,6 @@ int cleanup_rcu(void) {
 
 void check_and_set_statistic(unsigned long delay, int original_sysnum) {
     struct hacked_syscall *entry_sys;
-    unsigned long flags;
     rcu_read_lock();
         
     hash_for_each_possible_rcu(hacked_syscall_hash, entry_sys, hlist, original_sysnum) {
@@ -656,13 +649,13 @@ void check_and_set_statistic(unsigned long delay, int original_sysnum) {
             
             if (entry_sys->stats->peak_delay < delay) {
                 //aggiorno statistiche
-                spin_lock_irqsave(&stats_lock,flags);
+                spin_lock(&stats_lock);
 
                 entry_sys->stats->peak_delay = delay;
                 entry_sys->stats->peak_uid = __kuid_val(current_euid());
                 strscpy(entry_sys->stats->peak_prog_name, current->comm, TASK_COMM_LEN);
 
-                spin_unlock_irqrestore(&stats_lock,flags);
+                spin_unlock(&stats_lock);
             }
             
             break;
