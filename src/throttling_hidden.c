@@ -33,7 +33,8 @@ void epoch_handler(struct timer_list *t){
 
 	//leggo il numero di thread attualemnte bloccati, lo sommo alla variabile cumulativa
 	unsigned long curr_blocked = atomic64_read(&blocked_thread);
-	atomic64_add(curr_blocked,&(info_threads.sum_blocked));
+	
+	//atomic64_add(curr_blocked,&(info_threads.sum_blocked));
 
 	//se necessario aggiorno il picco
 	if (curr_blocked > atomic_read(&info_threads.peak_blocked)) {
