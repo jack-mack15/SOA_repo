@@ -774,7 +774,6 @@ long throttling_wrapper(const struct pt_regs *regs) {
 
         if (wait_ret != 0) {
             //se si verificano altre condizioni di risveglio
-            atomic64_dec_return(&blocked_thread);
             return -EINTR; 
         }
 
