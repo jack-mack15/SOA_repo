@@ -765,7 +765,7 @@ long throttling_wrapper(const struct pt_regs *regs) {
         //per statistiche del tempo di attesa imposto istante iniziale di attesa
         start_time = jiffies;
 
-        //come condizione di risveglio: monitor spento oppure token disponibili e preso token
+        //come condizione di risveglio: monitor spento oppure token disponibili
         int wait_ret = wait_event_interruptible(thrott_wq, 
                     atomic_read(&is_monitor_active) == 0 || atomic_read(&curr_syscalls) > 0);
 
