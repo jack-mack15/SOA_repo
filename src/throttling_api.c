@@ -724,7 +724,8 @@ long throttling_wrapper(const struct pt_regs *regs) {
 
     
     //controllo disponibilità system call
-    if (atomic_dec_if_positive(&curr_syscalls) < 0) {
+    //controllo precedente
+    /*if (atomic_dec_if_positive(&curr_syscalls) < 0) {
         //entro qua se non posso invocare system call, mi metto in attesa.
         
         //printk(KERN_INFO "Throttling module: syscall blocked. Now blocked threads are :%lld\n",atomic64_read(&blocked_thread));
@@ -748,9 +749,40 @@ long throttling_wrapper(const struct pt_regs *regs) {
         }
 
         atomic64_dec_return(&blocked_thread);
+    }*/
 
-        //se arrivo qui non è detto che ci sia ancora curr_syscall > 0, quindi 
-        //riverifico la condizione del while
+    //controllo modificato
+    //curr_syscall è il numero di token disponibili
+    while(atomic_dec_if_positive(&curr_syscalls) < 0) {
+        
+        //controllo se monitor è spento (utile se thread non ottiene token nel mentre che viene spento monitor)
+        if (atomic_read(&is_monitor_active) == 0) {
+            break; 
+        }
+
+        //incremento variabili che tengono numero di thread bloccati
+        atomic64_inc(&blocked_thread);
+        atomic64_inc(&info_threads.sum_blocked);
+        
+        //per statistiche del tempo di attesa imposto istante iniziale di attesa
+        start_time = jiffies;
+
+        //come condizione di risveglio: monitor spento oppure token disponibili e preso token
+        int wait_ret = wait_event_interruptible(thrott_wq, 
+                    atomic_read(&is_monitor_active) == 0 || atomic_dec_if_positive(&curr_syscalls) >= 0);
+
+        //decremento numero thread bloccati di uno
+        atomic64_dec_return(&blocked_thread);
+
+        if (wait_ret != 0) {
+            //se si verificano altre condizioni di risveglio
+            atomic64_dec_return(&blocked_thread);
+            return -EINTR; 
+        }
+
+        //calcolo tempo di attesa
+        delay += (jiffies - start_time);
+
     }
 
 

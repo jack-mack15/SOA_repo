@@ -315,9 +315,10 @@ static long int throttling_ioctl(struct file *file, unsigned cmd, unsigned long 
 
     }
 
-    
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////    
     //controllo se l'utente è root per i prossimi comandi
-    if (current_uid().val != 0) {
+    //(current_uid().val != 0) vecchio non valido
+    if (__kuid_val(current_euid()) != 0) {
         printk(KERN_WARNING "Throttling Module: u must be root!\n");
         return -EPERM;
     }
