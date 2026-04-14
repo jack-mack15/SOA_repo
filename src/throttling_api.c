@@ -732,7 +732,6 @@ long throttling_wrapper(const struct pt_regs *regs) {
 
         //per statistiche (magari sostituire con atomic_inc_return??)
         atomic64_inc_return(&blocked_thread);
-        atomic64_inc_return(&info_threads.sum_blocked);
         start_time = jiffies;
 
         //come condizione di risveglio: monitor spento oppure token disponibili e preso token
@@ -762,14 +761,13 @@ long throttling_wrapper(const struct pt_regs *regs) {
 
         //incremento variabili che tengono numero di thread bloccati
         atomic64_inc(&blocked_thread);
-        atomic64_inc(&info_threads.sum_blocked);
         
         //per statistiche del tempo di attesa imposto istante iniziale di attesa
         start_time = jiffies;
 
         //come condizione di risveglio: monitor spento oppure token disponibili e preso token
         int wait_ret = wait_event_interruptible(thrott_wq, 
-                    atomic_read(&is_monitor_active) == 0 || atomic_dec_if_positive(&curr_syscalls) >= 0);
+                    atomic_read(&is_monitor_active) == 0 || atomic_read(&curr_syscalls) > 0);
 
         //decremento numero thread bloccati di uno
         atomic64_dec_return(&blocked_thread);
